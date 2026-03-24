@@ -8,6 +8,7 @@ describe("Stream API Routes", () => {
 
     it("should return 200 and the stream when found", async () => {
       const mockStream = { id: validId, payer: "p1", accruedEstimate: "10.5" };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const spy = jest.spyOn(StreamRepository.prototype, "findById").mockResolvedValue(mockStream as any);
 
       const response = await request(app).get(`/api/v1/streams/${validId}`);
@@ -43,6 +44,7 @@ describe("Stream API Routes", () => {
         limit: 20,
         offset: 0,
       };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const spy = jest.spyOn(StreamRepository.prototype, "findAll").mockResolvedValue(mockResult as any);
 
       const response = await request(app).get("/api/v1/streams?payer=p1");

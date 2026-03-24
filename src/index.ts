@@ -5,6 +5,7 @@
 import cors from "cors";
 import express, { Request, Response } from "express";
 import streamRoutes from "./api/v1/streams";
+import { generateOpenApi } from "./api/v1/openapi";
 
 import indexerWebhookRouter from "./routes/webhooks/indexer";
 
@@ -17,6 +18,10 @@ app.use(express.json());
 
 app.get("/health", (_req: Request, res: Response) => {
   res.json({ status: "ok", service: "streampay-backend", timestamp: new Date().toISOString() });
+});
+
+app.get("/api/openapi.json", (_req: Request, res: Response) => {
+  res.json(generateOpenApi());
 });
 
 app.use("/api/v1/streams", streamRoutes);
