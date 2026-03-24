@@ -5,11 +5,15 @@
 import cors from "cors";
 import express, { Request, Response } from "express";
 import streamRoutes from "./api/v1/streams";
+import { metricsMiddleware, metricsHandler } from "./metrics/prometheus";
 
 import indexerWebhookRouter from "./routes/webhooks/indexer";
 
 const app = express();
 const PORT = process.env.PORT ?? 3001;
+
+app.get("/metrics", metricsHandler);
+app.use(metricsMiddleware);
 
 app.use(cors());
 app.use("/webhooks/indexer", express.raw({ type: "application/json" }), indexerWebhookRouter);

@@ -67,6 +67,21 @@ Security notes:
 - Replay protection is enforced by deduplicating `eventId` values in the ingestion service.
 - Duplicate deliveries are treated as safe no-ops and return `202 Accepted`.
 
+## Prometheus Metrics
+
+The backend exposes a standard Prometheus metrics endpoint at `GET /metrics`.
+
+- **HTTP Metrics**: Tracks request duration, error rates, and throughput (labels: `method`, `route`, `status_code`).
+- **Custom Metrics**: Includes `job_sync_lag_seconds` to track background processing delay.
+- **Default Metrics**: Standard Node.js process and runtime metrics (GC, memory, CPU).
+
+### Security
+
+In `production` Environments, the `/metrics` endpoint is protected by a Bearer token.
+- Set `PROMETHEUS_AUTH_TOKEN` in your environment.
+- Clients must provide `Authorization: Bearer <token>`.
+- In non-production environments, authentication is bypassed for easier debugging.
+
 ## Scripts
 
 | Command        | Description              |
@@ -92,8 +107,11 @@ Keep the default branch green before merging.
 ```
 streampay-backend/
 ├── src/
-│   ├── index.ts        # Express app and routes
-│   └── health.test.ts  # API tests
+│   ├── api/            # Versioned API routes
+│   ├── db/             # Drizzle ORM schema and client
+│   ├── metrics/        # Prometheus metrics logic and tests
+│   ├── repositories/   # Data access layer
+│   └── routes/         # Webhooks and other handlers
 ├── package.json
 ├── tsconfig.json
 ├── jest.config.js

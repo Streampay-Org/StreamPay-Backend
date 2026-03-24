@@ -36,7 +36,7 @@ router.get("/", async (req: Request, res: Response) => {
     const params: FindAllParams = {
       payer: payer as string | undefined,
       recipient: recipient as string | undefined,
-      status: status as any,
+      status: status as FindAllParams["status"],
       limit: limit ? parseInt(limit as string, 10) : undefined,
       offset: offset ? parseInt(offset as string, 10) : undefined,
     };
