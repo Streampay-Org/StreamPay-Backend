@@ -15,16 +15,17 @@ describe("StreamRepository", () => {
     jest.clearAllMocks();
   });
 
-  const createMockQuery = (value: any) => {
-    const query: any = {
+  const createMockQuery = (value: unknown) => {
+    const query = {
       from: jest.fn().mockReturnThis(),
       where: jest.fn().mockReturnThis(),
       orderBy: jest.fn().mockReturnThis(),
       limit: jest.fn().mockReturnThis(),
       offset: jest.fn().mockReturnThis(),
-      then: (onfulfilled: any) => Promise.resolve(value).then(onfulfilled),
+      then: (onfulfilled: (value: unknown) => unknown) => Promise.resolve(value).then(onfulfilled),
     };
-    return query;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return query as any;
   };
 
   describe("findById", () => {

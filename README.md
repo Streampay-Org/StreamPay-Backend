@@ -92,12 +92,14 @@ Keep the default branch green before merging.
 ```
 streampay-backend/
 ├── src/
-│   ├── index.ts        # Express app and routes
-│   └── health.test.ts  # API tests
+│   ├── api/            # Route handlers
+│   ├── db/             # Drizzle schema and config
+│   ├── repositories/   # Data access layer
+│   ├── services/       # Business logic
+│   ├── __tests__/      # Integration tests (Supertest)
+│   ├── health.test.ts  # Basic health check tests
+│   └── index.ts        # Express entries
 ├── package.json
-├── tsconfig.json
-├── jest.config.js
-├── .github/workflows/ci.yml
 └── README.md
 ```
 
