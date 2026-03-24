@@ -1,7 +1,16 @@
 import request from "supertest";
 import app from "./index";
+import { StreamRepository } from "./repositories/streamRepository";
 
 describe("StreamPay Backend", () => {
+  beforeAll(() => {
+    jest.spyOn(StreamRepository.prototype, "findAll").mockResolvedValue({
+      streams: [],
+      total: 0,
+      limit: 20,
+      offset: 0,
+    });
+  });
   describe("GET /health", () => {
     it("returns 200 and status ok", async () => {
       const res = await request(app).get("/health");
@@ -11,9 +20,9 @@ describe("StreamPay Backend", () => {
     });
   });
 
-  describe("GET /api/streams", () => {
+  describe("GET /api/v1/streams", () => {
     it("returns streams list", async () => {
-      const res = await request(app).get("/api/streams");
+      const res = await request(app).get("/api/v1/streams");
       expect(res.status).toBe(200);
       expect(res.body).toHaveProperty("streams");
       expect(res.body).toHaveProperty("total");

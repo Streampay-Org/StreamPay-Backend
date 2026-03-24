@@ -4,6 +4,7 @@
 
 import cors from "cors";
 import express, { Request, Response } from "express";
+import streamRoutes from "./api/v1/streams";
 
 const app = express();
 const PORT = process.env.PORT ?? 3001;
@@ -15,9 +16,7 @@ app.get("/health", (_req: Request, res: Response) => {
   res.json({ status: "ok", service: "streampay-backend", timestamp: new Date().toISOString() });
 });
 
-app.get("/api/streams", (_req: Request, res: Response) => {
-  res.json({ streams: [], total: 0 });
-});
+app.use("/api/v1/streams", streamRoutes);
 
 if (require.main === module) {
   app.listen(PORT, () => {
