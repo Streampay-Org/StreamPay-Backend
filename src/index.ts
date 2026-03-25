@@ -8,8 +8,10 @@ import v1Router from "./api/v1/router";
 
 import indexerWebhookRouter from "./routes/webhooks/indexer";
 
+import { env } from "./config/env";
+
 const app = express();
-const PORT = process.env.PORT ?? 3001;
+const PORT = env.PORT;
 
 app.get("/metrics", metricsHandler);
 app.use(metricsMiddleware);
