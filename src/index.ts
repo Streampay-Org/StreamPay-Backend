@@ -9,6 +9,7 @@ import v1Router from "./api/v1/router";
 import indexerWebhookRouter from "./routes/webhooks/indexer";
 
 import { env } from "./config/env";
+import { metricsHandler, metricsMiddleware } from "./metrics/prometheus";
 
 const app = express();
 const PORT = env.PORT;
