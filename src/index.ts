@@ -2,16 +2,21 @@
  * StreamPay Backend — API gateway for stream management, metering, and settlement.
  */
 
-//
 import cors from "cors";
 import express, { Request, Response } from "express";
 import streamRoutes from "./api/v1/streams";
 import { generateOpenApi } from "./api/v1/openapi";
+import { metricsHandler, metricsMiddleware } from "./metrics/prometheus";
 
 import indexerWebhookRouter from "./routes/webhooks/indexer";
 
+import { env } from "./config/env";
+
 const app = express();
-const PORT = process.env.PORT ?? 3001;
+const PORT = env.PORT;
+
+app.get("/metrics", metricsHandler);
+app.use(metricsMiddleware);
 
 app.use(cors());
 app.use(

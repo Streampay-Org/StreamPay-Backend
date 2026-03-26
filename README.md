@@ -71,6 +71,15 @@ Security notes:
 - Replay protection is enforced by deduplicating `eventId` values in the ingestion service.
 - Duplicate deliveries are treated as safe no-ops and return `202 Accepted`.
 
+## API Versioning Policy
+
+All new features and endpoints must be mounted under the `/api/v1` prefix.
+
+**Deprecation and Sunset Policy:**
+We use HTTP headers to signal end-of-life for specific API versions:
+- `X-API-Version`: Indicates the current version of the API responding to the request.
+- `Deprecation`: A boolean flag (`true` or `false`) indicating if the API version is deprecated. When `true`, developers should migrate to a newer version as soon as possible.
+
 ## Scripts
 
 | Command        | Description              |
@@ -96,8 +105,11 @@ Keep the default branch green before merging.
 ```
 streampay-backend/
 ├── src/
-│   ├── index.ts        # Express app and routes
-│   └── health.test.ts  # API tests
+│   ├── api/            # Versioned API routes
+│   ├── db/             # Drizzle ORM schema and client
+│   ├── metrics/        # Prometheus metrics logic and tests
+│   ├── repositories/   # Data access layer
+│   └── routes/         # Webhooks and other handlers
 ├── package.json
 ├── tsconfig.json
 ├── jest.config.js
@@ -108,3 +120,10 @@ streampay-backend/
 ## License
 
 MIT
+
+## Smoke Testing
+To run the E2E smoke tests against a local Docker stack:
+1. `docker-compose up -d`
+2. `./scripts/smoke.sh http://localhost:3000`
+
+**Prerequisites:** `curl` must be installed.

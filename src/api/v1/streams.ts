@@ -8,7 +8,7 @@ const streamRepository = new StreamRepository();
 router.get("/:id", async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    
+
     // Basic UUID validation (regex)
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(id)) {
