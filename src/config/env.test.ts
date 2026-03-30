@@ -9,6 +9,7 @@ describe("Environment Configuration Schema", () => {
     DATABASE_URL: "postgres://localhost:5432/db",
     JWT_SECRET: "a_very_long_secret_that_is_at_least_32_characters",
     RPC_URL: "https://api.mainnet-beta.solana.com",
+    AUDIT_LOG_RETENTION_DAYS: "365",
     NODE_ENV: "development",
   };
 
@@ -18,6 +19,7 @@ describe("Environment Configuration Schema", () => {
     if (result.success) {
       expect(result.data.PORT).toBe(3001);
       expect(result.data.NODE_ENV).toBe("development");
+      expect(result.data.AUDIT_LOG_RETENTION_DAYS).toBe(365);
     }
   });
 
@@ -66,6 +68,16 @@ describe("Environment Configuration Schema", () => {
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.NODE_ENV).toBe("development");
+    }
+  });
+
+  it("should default AUDIT_LOG_RETENTION_DAYS to 365 if missing", () => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { AUDIT_LOG_RETENTION_DAYS, ...envWithoutRetention } = validEnv;
+    const result = envSchema.safeParse(envWithoutRetention);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.AUDIT_LOG_RETENTION_DAYS).toBe(365);
     }
   });
 

@@ -67,6 +67,26 @@ Security notes:
 - Replay protection is enforced by deduplicating `eventId` values in the ingestion service.
 - Duplicate deliveries are treated as safe no-ops and return `202 Accepted`.
 
+## Audit Logging (Sensitive API Actions)
+
+Sensitive API actions now write immutable audit rows to `audit_logs`.
+
+Captured fields:
+- `actor` (who performed the action)
+- `action` (what happened: create/update/admin)
+- `stream_id` (if action is stream-specific)
+- `ip_address` (source IP)
+- `created_at` (server timestamp)
+
+The table is append-only by design. The code path only performs inserts and does not expose update/delete operations for audit rows.
+
+Retention policy:
+- Default retention is `365` days (`AUDIT_LOG_RETENTION_DAYS`).
+- Retention cleanup should be executed by a scheduled database job in deployment environments.
+
+Migration:
+- Apply [src/db/migrations/0001_create_audit_logs.sql](src/db/migrations/0001_create_audit_logs.sql) to create the audit table and enum.
+
 ## API Versioning Policy
 
 All new features and endpoints must be mounted under the `/api/v1` prefix.

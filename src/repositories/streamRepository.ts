@@ -61,6 +61,19 @@ export class StreamRepository {
     };
   }
 
+  async updateStatus(id: string, status: "active" | "paused" | "cancelled" | "completed"): Promise<Stream | null> {
+    const [updated] = await db
+      .update(streams)
+      .set({
+        status,
+        updatedAt: new Date(),
+      })
+      .where(eq(streams.id, id))
+      .returning();
+
+    return updated ?? null;
+  }
+
   private calculateAccruedEstimate(stream: Stream): number {
     if (stream.status !== "active") return 0;
 

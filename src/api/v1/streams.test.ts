@@ -1,6 +1,7 @@
 import request from "supertest";
 import app from "../../index";
 import { StreamRepository } from "../../repositories/streamRepository";
+import { AuditService } from "../../services/auditService";
 
 describe("Stream API Routes", () => {
   describe("GET /api/v1/streams/:id", () => {
@@ -51,6 +52,50 @@ describe("Stream API Routes", () => {
       expect(response.body).toEqual(mockResult);
       expect(spy).toHaveBeenCalledWith(expect.objectContaining({ payer: "p1" }));
       spy.mockRestore();
+    });
+  });
+
+  describe("POST /api/v1/streams/:id/admin/pause", () => {
+    const validId = "123e4567-e89b-12d3-a456-426614174000";
+
+    beforeEach(() => {
+      process.env.JWT_SECRET = "test_shared_admin_secret_123456789012";
+    });
+
+    it("should return 401 when request is unauthorized", async () => {
+      const response = await request(app).post(`/api/v1/streams/${validId}/admin/pause`);
+
+      expect(response.status).toBe(401);
+      expect(response.body.error).toBe("Unauthorized");
+    });
+
+    it("should write an audit row on successful protected action", async () => {
+      const mockStream = { id: validId, status: "paused" };
+      const updateSpy = jest
+        .spyOn(StreamRepository.prototype, "updateStatus")
+        .mockResolvedValue(mockStream as never);
+      const auditSpy = jest
+        .spyOn(AuditService.prototype, "logSensitiveAction")
+        .mockResolvedValue({ id: "audit-1" } as never);
+
+      const response = await request(app)
+        .post(`/api/v1/streams/${validId}/admin/pause`)
+        .set("Authorization", `Bearer ${process.env.JWT_SECRET}`)
+        .set("x-actor-id", "admin-user");
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ id: validId, status: "paused" });
+      expect(updateSpy).toHaveBeenCalledWith(validId, "paused");
+      expect(auditSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actor: "admin-user",
+          action: "stream_admin_action",
+          streamId: validId,
+        }),
+      );
+
+      updateSpy.mockRestore();
+      auditSpy.mockRestore();
     });
   });
 });
