@@ -1,5 +1,6 @@
 import { Router, Request, Response } from "express";
 import { StreamRepository, FindAllParams } from "../../repositories/streamRepository";
+import { authenticateJWT } from "../../middleware/auth";
 
 const router = Router();
 const streamRepository = new StreamRepository();
@@ -50,4 +51,24 @@ router.get("/", async (req: Request, res: Response) => {
   }
 });
 
+// POST /api/v1/streams  — protected: requires a valid JWT
+router.post("/", authenticateJWT, async (req: Request, res: Response) => {
+  try {
+    // req.user is guaranteed to be set by authenticateJWT
+    const creatorSub = req.user?.sub ?? "unknown";
+
+    // TODO: validate body with zod and persist via streamRepository.create()
+    // For now, echo the payload back with the authenticated subject.
+    res.status(201).json({
+      message: "Stream creation accepted",
+      createdBy: creatorSub,
+      payload: req.body,
+    });
+  } catch (error) {
+    console.error("Error creating stream:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 export default router;
+
