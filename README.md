@@ -67,6 +67,25 @@ Security notes:
 - Replay protection is enforced by deduplicating `eventId` values in the ingestion service.
 - Duplicate deliveries are treated as safe no-ops and return `202 Accepted`.
 
+## Transaction Submission Service (Horizon/RPC)
+
+The backend now includes a transaction submission abstraction in `src/services/transactionService.ts`.
+
+Signer modes:
+- `external_signer` (default): backend prepares/accepts XDR and returns it for signing by an external signer service.
+- `backend_sign`: backend signs and submits transactions.
+
+Trust model:
+- Production: signing keys must be KMS-managed (`TX_SIGNING_KMS_KEY_ID`) when `TX_SIGNER_MODE=backend_sign`.
+- Development only: `TX_SIGNING_SEED` can be used for local testing.
+- Seed phrases are never logged and are redacted from surfaced service errors.
+
+Relevant env vars:
+- `TX_SIGNER_MODE` = `backend_sign` or `external_signer`
+- `TX_SIGNING_KMS_KEY_ID` for production backend signing
+- `TX_SIGNING_SEED` for development-only backend signing
+- `TX_EXTERNAL_SIGNER_URL` for external signer workflows
+
 ## API Versioning Policy
 
 All new features and endpoints must be mounted under the `/api/v1` prefix.

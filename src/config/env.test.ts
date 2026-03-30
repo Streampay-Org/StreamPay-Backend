@@ -9,6 +9,7 @@ describe("Environment Configuration Schema", () => {
     DATABASE_URL: "postgres://localhost:5432/db",
     JWT_SECRET: "a_very_long_secret_that_is_at_least_32_characters",
     RPC_URL: "https://api.mainnet-beta.solana.com",
+    TX_SIGNER_MODE: "external_signer",
     NODE_ENV: "development",
   };
 
@@ -18,6 +19,7 @@ describe("Environment Configuration Schema", () => {
     if (result.success) {
       expect(result.data.PORT).toBe(3001);
       expect(result.data.NODE_ENV).toBe("development");
+      expect(result.data.TX_SIGNER_MODE).toBe("external_signer");
     }
   });
 
@@ -66,6 +68,48 @@ describe("Environment Configuration Schema", () => {
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.NODE_ENV).toBe("development");
+    }
+  });
+
+  it("should default TX_SIGNER_MODE to external_signer if missing", () => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { TX_SIGNER_MODE, ...envWithoutSignerMode } = validEnv;
+    const result = envSchema.safeParse(envWithoutSignerMode);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.TX_SIGNER_MODE).toBe("external_signer");
+    }
+  });
+
+  it("should fail if TX_SIGNING_SEED is set outside development", () => {
+    const invalidEnv = {
+      ...validEnv,
+      NODE_ENV: "production",
+      TX_SIGNING_SEED: "SSECRET",
+    };
+
+    const result = envSchema.safeParse(invalidEnv);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.flatten().fieldErrors.TX_SIGNING_SEED).toContain(
+        "TX_SIGNING_SEED is only allowed in development.",
+      );
+    }
+  });
+
+  it("should fail in production backend_sign mode without KMS key id", () => {
+    const invalidEnv = {
+      ...validEnv,
+      NODE_ENV: "production",
+      TX_SIGNER_MODE: "backend_sign",
+    };
+
+    const result = envSchema.safeParse(invalidEnv);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.flatten().fieldErrors.TX_SIGNING_KMS_KEY_ID).toContain(
+        "TX_SIGNING_KMS_KEY_ID is required outside development when TX_SIGNER_MODE=backend_sign.",
+      );
     }
   });
 
