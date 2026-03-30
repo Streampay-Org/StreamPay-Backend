@@ -35,6 +35,73 @@ describe("Stream API Routes", () => {
     });
   });
 
+  describe("POST /api/v1/streams", () => {
+    const validBody = {
+      payer: "GPAYER",
+      recipient: "GRECIPIENT",
+      ratePerSecond: "0.000001",
+      startTime: "2026-01-01T00:00:00.000Z",
+      totalAmount: "100.0",
+    };
+
+    it("should return 201 and the created stream", async () => {
+      const created = { id: "123e4567-e89b-12d3-a456-426614174000", ...validBody, status: "active" };
+      const spy = jest
+        .spyOn(StreamRepository.prototype, "create")
+        .mockResolvedValue(created as never);
+
+      const response = await request(app)
+        .post("/api/v1/streams")
+        .send(validBody);
+
+      expect(response.status).toBe(201);
+      expect(response.body.id).toBe(created.id);
+      expect(response.body.status).toBe("active");
+      spy.mockRestore();
+    });
+
+    it("should return 400 when required fields are missing", async () => {
+      const response = await request(app)
+        .post("/api/v1/streams")
+        .send({ payer: "GPAYER" });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBe("Validation failed");
+      expect(response.body.details).toHaveProperty("recipient");
+    });
+
+    it("should return 400 when ratePerSecond is not a decimal string", async () => {
+      const response = await request(app)
+        .post("/api/v1/streams")
+        .send({ ...validBody, ratePerSecond: "not-a-number" });
+
+      expect(response.status).toBe(400);
+      expect(response.body.details).toHaveProperty("ratePerSecond");
+    });
+
+    it("should return 400 when startTime is not ISO-8601", async () => {
+      const response = await request(app)
+        .post("/api/v1/streams")
+        .send({ ...validBody, startTime: "not-a-date" });
+
+      expect(response.status).toBe(400);
+      expect(response.body.details).toHaveProperty("startTime");
+    });
+
+    it("should return 500 when repository throws", async () => {
+      const spy = jest
+        .spyOn(StreamRepository.prototype, "create")
+        .mockRejectedValue(new Error("DB error"));
+
+      const response = await request(app)
+        .post("/api/v1/streams")
+        .send(validBody);
+
+      expect(response.status).toBe(500);
+      spy.mockRestore();
+    });
+  });
+
   describe("GET /api/v1/streams", () => {
     it("should return 200 and the list of streams", async () => {
       const mockResult = {

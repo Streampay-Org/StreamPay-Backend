@@ -1,6 +1,6 @@
 import { eq, and, desc, sql } from "drizzle-orm";
 import { db } from "../db/index";
-import { streams, Stream } from "../db/schema";
+import { streams, Stream, NewStream } from "../db/schema";
 
 export interface FindAllParams {
   payer?: string;
@@ -59,6 +59,14 @@ export class StreamRepository {
       limit,
       offset,
     };
+  }
+
+  async create(data: NewStream): Promise<Stream> {
+    const [created] = await db.insert(streams).values(data).returning();
+    if (!created) {
+      throw new Error("Stream insert did not return a row");
+    }
+    return created;
   }
 
   private calculateAccruedEstimate(stream: Stream): number {

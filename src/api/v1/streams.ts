@@ -1,8 +1,58 @@
 import { Router, Request, Response } from "express";
+import { z } from "zod";
 import { StreamRepository, FindAllParams } from "../../repositories/streamRepository";
 
 const router = Router();
 const streamRepository = new StreamRepository();
+
+const createStreamSchema = z.object({
+  payer: z.string().min(1, "payer is required"),
+  recipient: z.string().min(1, "recipient is required"),
+  ratePerSecond: z
+    .string()
+    .regex(/^\d+(\.\d+)?$/, "ratePerSecond must be a positive decimal string"),
+  startTime: z.string().datetime({ message: "startTime must be an ISO-8601 datetime" }),
+  endTime: z
+    .string()
+    .datetime({ message: "endTime must be an ISO-8601 datetime" })
+    .optional(),
+  totalAmount: z
+    .string()
+    .regex(/^\d+(\.\d+)?$/, "totalAmount must be a positive decimal string"),
+});
+
+type CreateStreamBody = z.infer<typeof createStreamSchema>;
+
+// POST /api/v1/streams
+router.post("/", async (req: Request, res: Response) => {
+  try {
+    const parsed = createStreamSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        error: "Validation failed",
+        details: parsed.error.flatten().fieldErrors,
+      });
+    }
+
+    const body = parsed.data as CreateStreamBody;
+
+    const stream = await streamRepository.create({
+      payer: body.payer,
+      recipient: body.recipient,
+      ratePerSecond: body.ratePerSecond,
+      startTime: new Date(body.startTime),
+      endTime: body.endTime ? new Date(body.endTime) : undefined,
+      totalAmount: body.totalAmount,
+      status: "active",
+      lastSettledAt: new Date(body.startTime),
+    });
+
+    return res.status(201).json(stream);
+  } catch (error) {
+    console.error("Error creating stream:", error);
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
 
 // GET /api/v1/streams/:id
 router.get("/:id", async (req: Request, res: Response) => {
