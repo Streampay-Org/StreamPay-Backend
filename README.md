@@ -37,7 +37,19 @@ Node.js + Express (TypeScript) service that will power the StreamPay API gateway
    npm run build && npm start
    ```
 
-API will be at `http://localhost:3001` (or `PORT` env). Try `GET /health` and `GET /api/streams`.
+API will be at `http://localhost:3001` (or `PORT` env). Try `GET /health` and `GET /api/v1/streams`.
+
+## Health checks
+
+The service provides both shallow and deep health checks:
+
+-   `GET /health`: Shallow check, returns `200 OK` if the service is running.
+-   `GET /health?deep=1`: Deep check, probes database connectivity and optionally Soroban RPC reachability. Returns `503 Service Unavailable` if critical dependencies are down.
+-   `GET /health/ready`: Alias for a deep check, useful for Kubernetes readiness probes.
+
+Configuration:
+-   `RPC_PROBE_ENABLED`: Set to `true` to enable Soroban RPC probing.
+-   `HEALTH_CHECK_TIMEOUT_MS`: Timeout for individual probes (default: `5000ms`).
 
 ## Indexer webhook ingestion
 
