@@ -7,6 +7,7 @@ import express, { Request, Response } from "express";
 import v1Router from "./api/v1/router";
 
 import indexerWebhookRouter from "./routes/webhooks/indexer";
+import { metricsHandler, metricsMiddleware } from "./metrics/prometheus";
 
 import { env } from "./config/env";
 
