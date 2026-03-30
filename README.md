@@ -123,3 +123,48 @@ To run the E2E smoke tests against a local Docker stack:
 2. `./scripts/smoke.sh http://localhost:3000`
 
 **Prerequisites:** `curl` must be installed.
+
+## Operations
+
+### Database Connection Pool
+
+The backend uses a PostgreSQL connection pool with configurable settings.
+
+#### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DB_POOL_MAX` | 10 (dev) / 20 (prod) | Maximum number of connections in pool |
+| `DB_POOL_IDLE_TIMEOUT` | 30000 (dev) / 60000 (prod) | Idle connection timeout in ms |
+| `DB_CONNECTION_TIMEOUT` | 5000 (dev) / 10000 (prod) | Connection acquisition timeout in ms |
+| `DB_STATEMENT_TIMEOUT` | 30000 (dev) / 60000 (prod) | Query timeout in ms |
+
+#### Recommended Settings
+
+**Development:**
+- Pool size: 10 connections
+- Idle timeout: 30 seconds
+- Statement timeout: 30 seconds
+
+**Production:**
+- Pool size: 20 connections
+- Idle timeout: 60 seconds
+- Statement timeout: 60 seconds
+
+#### Monitoring
+
+Pool errors are logged to stderr. The application will exit on unexpected idle client errors to prevent undefined states.
+
+### Migrations
+
+Run database migrations using Drizzle Kit:
+
+```bash
+# Push schema to database
+npx drizzle-kit push
+
+# Generate migration files
+npx drizzle-kit generate
+```
+
+See [docs/data-model.md](docs/data-model.md) for schema documentation.
