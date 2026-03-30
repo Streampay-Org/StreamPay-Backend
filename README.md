@@ -67,6 +67,26 @@ Security notes:
 - Replay protection is enforced by deduplicating `eventId` values in the ingestion service.
 - Duplicate deliveries are treated as safe no-ops and return `202 Accepted`.
 
+## HTTP request size limits
+
+The service applies explicit HTTP size limits to reduce parser and memory pressure:
+
+- JSON request bodies are limited to `100kb`.
+- Total HTTP request headers are limited to `16384` bytes (`16 KiB`).
+
+Behavior:
+
+- Oversized JSON request bodies return `413 Payload Too Large` with a JSON response shaped as:
+
+```json
+{
+   "error": "payload_too_large",
+   "message": "JSON request body exceeds 100kb limit."
+}
+```
+
+- Oversized request headers are rejected at the server layer with `431 Request Header Fields Too Large`.
+
 ## API Versioning Policy
 
 All new features and endpoints must be mounted under the `/api/v1` prefix.
