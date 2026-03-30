@@ -7,6 +7,7 @@ import express, { Request, Response } from "express";
 import v1Router from "./api/v1/router";
 
 import indexerWebhookRouter from "./routes/webhooks/indexer";
+import { globalRateLimiter } from "./middleware/rateLimit";
 
 import { env } from "./config/env";
 
@@ -17,6 +18,7 @@ app.get("/metrics", metricsHandler);
 app.use(metricsMiddleware);
 
 app.use(cors());
+app.use(globalRateLimiter);
 app.use("/webhooks/indexer", express.raw({ type: "application/json" }), indexerWebhookRouter);
 app.use(express.json());
 

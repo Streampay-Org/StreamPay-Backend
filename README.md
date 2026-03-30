@@ -76,6 +76,30 @@ We use HTTP headers to signal end-of-life for specific API versions:
 - `X-API-Version`: Indicates the current version of the API responding to the request.
 - `Deprecation`: A boolean flag (`true` or `false`) indicating if the API version is deprecated. When `true`, developers should migrate to a newer version as soon as possible.
 
+## Rate Limiting
+
+All API routes are protected by IP-based and API-key-based rate limiting using [`express-rate-limit`](https://github.com/express-rate-limit/express-rate-limit).
+
+| Limiter | Window | Max requests | Applies to |
+|---------|--------|-------------|------------|
+| Global  | 60 s   | 100         | All routes |
+| Auth    | 15 min | 20          | Auth / sensitive endpoints |
+
+When a limit is exceeded the server responds with **HTTP 429 Too Many Requests** and includes a `Retry-After` header (via the `RateLimit-Reset` standard header) so clients know when to retry.
+
+**Key resolution priority:** `X-API-Key` header → client IP address. Requests that supply an `X-API-Key` header are bucketed per key, allowing legitimate high-volume integrations to be granted higher limits independently of other clients.
+
+**Configuration** (all optional — defaults shown):
+
+```
+RATE_LIMIT_WINDOW_MS=60000       # Global window in ms (default: 60 s)
+RATE_LIMIT_MAX=100               # Global max requests per window (default: 100)
+RATE_LIMIT_AUTH_WINDOW_MS=900000 # Auth window in ms (default: 15 min)
+RATE_LIMIT_AUTH_MAX=20           # Auth max requests per window (default: 20)
+```
+
+> Security note: If the service runs behind a reverse proxy (nginx, AWS ALB, etc.) set `app.set('trust proxy', 1)` so that `req.ip` reflects the real client IP rather than the proxy address.
+
 ## Scripts
 
 | Command        | Description              |
