@@ -5,6 +5,7 @@
 import cors from "cors";
 import express, { Request, Response } from "express";
 import v1Router from "./api/v1/router";
+import { metricsHandler, metricsMiddleware } from "./metrics/prometheus";
 
 import indexerWebhookRouter from "./routes/webhooks/indexer";
 

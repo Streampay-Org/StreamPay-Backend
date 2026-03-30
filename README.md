@@ -37,7 +37,13 @@ Node.js + Express (TypeScript) service that will power the StreamPay API gateway
    npm run build && npm start
    ```
 
-API will be at `http://localhost:3001` (or `PORT` env). Try `GET /health` and `GET /api/streams`.
+API will be at `http://localhost:3001` (or `PORT` env). Try `GET /health`, `GET /api/v1/streams`, and `GET /api/v1/streams/:id/accrual-preview`.
+
+### Accrual Preview
+The `GET /api/v1/streams/:id/accrual-preview` endpoint provides an estimated accrued amount for a stream since its last settlement.
+- **Read-only**: This endpoint does not modify state.
+- **Heavy Rate Limit**: This endpoint is subject to strict rate limits.
+- **Disclaimer**: Estimates are based on database records and a standard streaming formula; they may slightly differ from the real-time on-chain state due to indexing latency.
 
 ## Indexer webhook ingestion
 
