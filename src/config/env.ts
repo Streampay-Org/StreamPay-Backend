@@ -9,6 +9,8 @@ export const envSchema = z.object({
   DATABASE_URL: z.string().url(),
   JWT_SECRET: z.string().min(32, "JWT_SECRET must be at least 32 characters"),
   RPC_URL: z.string().url(),
+  SOROBAN_RPC_URL: z.string().url(),
+  SOROBAN_NETWORK_PASSPHRASE: z.string().min(1, "SOROBAN_NETWORK_PASSPHRASE is required"),
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
 });
 

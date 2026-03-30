@@ -9,6 +9,8 @@ describe("Environment Configuration Schema", () => {
     DATABASE_URL: "postgres://localhost:5432/db",
     JWT_SECRET: "a_very_long_secret_that_is_at_least_32_characters",
     RPC_URL: "https://api.mainnet-beta.solana.com",
+    SOROBAN_RPC_URL: "https://soroban-testnet.stellar.org",
+    SOROBAN_NETWORK_PASSPHRASE: "Test SDF Network ; September 2015",
     NODE_ENV: "development",
   };
 
@@ -46,6 +48,25 @@ describe("Environment Configuration Schema", () => {
     expect(result.success).toBe(false);
     if (!result.success) {
       expect(result.error.flatten().fieldErrors).toHaveProperty("RPC_URL");
+    }
+  });
+
+  it("should fail if SOROBAN_RPC_URL is not a valid URL", () => {
+    const invalidEnv = { ...validEnv, SOROBAN_RPC_URL: "bad-url" };
+    const result = envSchema.safeParse(invalidEnv);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.flatten().fieldErrors).toHaveProperty("SOROBAN_RPC_URL");
+    }
+  });
+
+  it("should fail if SOROBAN_NETWORK_PASSPHRASE is missing", () => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { SOROBAN_NETWORK_PASSPHRASE, ...invalidEnv } = validEnv;
+    const result = envSchema.safeParse(invalidEnv);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.flatten().fieldErrors).toHaveProperty("SOROBAN_NETWORK_PASSPHRASE");
     }
   });
 

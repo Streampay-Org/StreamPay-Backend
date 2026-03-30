@@ -67,6 +67,29 @@ Security notes:
 - Replay protection is enforced by deduplicating `eventId` values in the ingestion service.
 - Duplicate deliveries are treated as safe no-ops and return `202 Accepted`.
 
+## Soroban / Stellar RPC Client Wrapper
+
+`src/clients/sorobanClient.ts` provides a typed JSON-RPC client for StreamPay contract and ledger operations.
+
+Implemented operations:
+- `simulateContractCall` (idempotent read, retried with exponential backoff)
+- `getLedgerEntry` (idempotent read, retried with exponential backoff)
+- `sendTransaction` (write path, single-attempt by default)
+
+Retry and timeout policy constants:
+- `SOROBAN_RPC_TIMEOUT_MS = 8000`
+- `SOROBAN_RPC_MAX_RETRIES = 3`
+- `SOROBAN_RPC_RETRY_BASE_DELAY_MS = 200`
+
+Required environment variables:
+- `SOROBAN_RPC_URL`
+- `SOROBAN_NETWORK_PASSPHRASE`
+
+Security notes:
+- Reads are treated as idempotent and safe to retry.
+- Writes are not retried by default to avoid accidental duplicate submissions.
+- The wrapper avoids logging secrets and only includes method-level failure context.
+
 ## API Versioning Policy
 
 All new features and endpoints must be mounted under the `/api/v1` prefix.
