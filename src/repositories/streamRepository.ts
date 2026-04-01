@@ -1,6 +1,6 @@
 import { eq, and, desc, sql } from "drizzle-orm";
 import { db } from "../db/index";
-import { streams, Stream } from "../db/schema";
+import { streams, Stream, NewStream } from "../db/schema";
 
 export interface FindAllParams {
   payer?: string;
