@@ -7,6 +7,12 @@ export const envSchema = z.object({
   PORT: z.coerce.number().default(3001),
   DATABASE_URL: z.string().url(),
   JWT_SECRET: z.string().min(32, "JWT_SECRET must be at least 32 characters"),
+  // Optional: provide an RSA/EC public key to use RS256 instead of HS256.
+  // Value should be the PEM-encoded public key (newlines replaced with \\n).
+  JWT_PUBLIC_KEY: z.string().optional(),
+  // Optional claim validators — enforced when present.
+  JWT_ISSUER: z.string().optional(),
+  JWT_AUDIENCE: z.string().optional(),
   RPC_URL: z.string().url(),
   AUDIT_LOG_RETENTION_DAYS: z.coerce.number().int().positive().default(365),
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
