@@ -1,34 +1,24 @@
 import request from "supertest";
 import app from "./index";
-import { db } from "./db";
-import { env } from "./config/env";
+import { StreamRepository } from "./repositories/streamRepository";
+import { refreshApiKeyStore } from "./middleware/apiKeyAuth";
 
-// Mock the database
-jest.mock("./db", () => ({
-  db: {
-    execute: jest.fn(),
-  },
-}));
+describe("StreamPay Backend", () => {
+  beforeAll(() => {
+    process.env.API_KEYS = "test-1234";
+    refreshApiKeyStore();
 
-// Mock the environment config
-jest.mock("./config/env", () => ({
-  env: {
-    RPC_URL: "https://rpc.example.com",
-    RPC_PROBE_ENABLED: false,
-    HEALTH_CHECK_TIMEOUT_MS: 1000,
-  },
-}));
-
-// Mock global fetch
-global.fetch = jest.fn() as jest.Mock;
-
-describe("Health Check Routes", () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (env as any).RPC_PROBE_ENABLED = false; // Reset to default
+    jest.spyOn(StreamRepository.prototype, "findAll").mockResolvedValue({
+      streams: [],
+      total: 0,
+      limit: 20,
+      offset: 0,
+    });
   });
 
+  afterAll(() => {
+    delete process.env.API_KEYS;
+  });
   describe("GET /health", () => {
     it("returns 200 and status ok (shallow check)", async () => {
       const res = await request(app).get("/health");
@@ -58,11 +48,9 @@ describe("Health Check Routes", () => {
     });
   });
 
-  describe("GET /health/ready", () => {
-    it("always performs a deep check", async () => {
-      (db.execute as jest.Mock).mockResolvedValueOnce({});
-      
-      const res = await request(app).get("/health/ready");
+  describe("GET /api/v1/streams", () => {
+    it("returns streams list", async () => {
+      const res = await request(app).get("/api/v1/streams").set("x-api-key", "test-1234");
       expect(res.status).toBe(200);
       expect(res.body.details).toBeDefined();
       expect(db.execute).toHaveBeenCalled();

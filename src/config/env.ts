@@ -1,17 +1,25 @@
 import { z } from "zod";
 import dotenv from "dotenv";
 
-// Load .env file
 dotenv.config();
 
 export const envSchema = z.object({
   PORT: z.coerce.number().default(3001),
   DATABASE_URL: z.string().url(),
   JWT_SECRET: z.string().min(32, "JWT_SECRET must be at least 32 characters"),
+  // Optional: provide an RSA/EC public key to use RS256 instead of HS256.
+  // Value should be the PEM-encoded public key (newlines replaced with \\n).
+  JWT_PUBLIC_KEY: z.string().optional(),
+  // Optional claim validators — enforced when present.
+  JWT_ISSUER: z.string().optional(),
+  JWT_AUDIENCE: z.string().optional(),
   RPC_URL: z.string().url(),
-  RPC_PROBE_ENABLED: z.coerce.boolean().default(false),
-  HEALTH_CHECK_TIMEOUT_MS: z.coerce.number().default(5000),
+  AUDIT_LOG_RETENTION_DAYS: z.coerce.number().int().positive().default(365),
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
+  DB_POOL_MAX: z.coerce.number().min(1).max(100).default(10),
+  DB_POOL_IDLE_TIMEOUT: z.coerce.number().min(0).default(30000),
+  DB_CONNECTION_TIMEOUT: z.coerce.number().min(0).default(5000),
+  DB_STATEMENT_TIMEOUT: z.coerce.number().min(0).default(30000),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -21,7 +29,7 @@ export const validateEnv = (config: NodeJS.ProcessEnv): Env => {
 
   if (!result.success) {
     if (process.env.NODE_ENV !== "test") {
-      console.error("❌ Invalid environment variables:");
+      console.error("Invalid environment variables:");
       console.error(JSON.stringify(result.error.flatten().fieldErrors, null, 2));
       process.exit(1);
     }
@@ -31,7 +39,16 @@ export const validateEnv = (config: NodeJS.ProcessEnv): Env => {
   return result.data;
 };
 
-// Fail fast at startup, but skip during tests to allow manual validation testing
-export const env = process.env.NODE_ENV === "test" 
-  ? ({} as unknown as Env) 
+export const env = process.env.NODE_ENV === "test"
+  ? ({
+      PORT: 3001,
+      DATABASE_URL: "postgres://user:password@localhost:5432/streampay",
+      JWT_SECRET: "test_secret_key_at_least_32_characters_long",
+      RPC_URL: "https://api.testnet.solana.com",
+      NODE_ENV: "test" as const,
+      DB_POOL_MAX: 5,
+      DB_POOL_IDLE_TIMEOUT: 10000,
+      DB_CONNECTION_TIMEOUT: 2000,
+      DB_STATEMENT_TIMEOUT: 10000,
+    })
   : validateEnv(process.env);
