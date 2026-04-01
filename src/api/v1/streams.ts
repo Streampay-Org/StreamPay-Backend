@@ -1,170 +1,38 @@
-import crypto from "crypto";
-import { Router, Request, Response, NextFunction } from "express";
-import { StreamRepository, FindAllParams, ExportParams } from "../../repositories/streamRepository";
-import { Stream } from "../../db/schema";
+import { Router, Request, Response } from "express";
+import { StreamRepository } from "../../repositories/streamRepository";
+import { validate } from "../../middleware/validate";
+import {
+  getStreamsQuerySchema,
+  uuidParamSchema,
+} from "../../validation/schemas";
 
 const router = Router();
 const streamRepository = new StreamRepository();
+const auditService = new AuditService();
 
-// ---------------------------------------------------------------------------
-// Auth middleware
-// ---------------------------------------------------------------------------
+const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/**
- * Enforces Bearer-token authentication using the JWT_SECRET environment
- * variable.  Timing-safe comparison prevents timing-oracle attacks.
- */
-function requireAuth(req: Request, res: Response, next: NextFunction): void {
-  const secret = process.env.JWT_SECRET;
-  if (!secret) {
-    res.status(500).json({ error: "Server misconfiguration: missing JWT_SECRET" });
-    return;
-  }
+const getBearerToken = (authorizationHeader?: string): string | null => {
+  if (!authorizationHeader) return null;
+  const [scheme, token] = authorizationHeader.split(" ");
+  if (scheme !== "Bearer" || !token) return null;
+  return token;
+};
 
-  const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
-  if (!token) {
-    res.status(401).json({ error: "Unauthorized" });
-    return;
-  }
+const isProtectedActionAuthorized = (req: Request): boolean => {
+  const expected = process.env.JWT_SECRET;
+  if (!expected) return false;
 
-  const tokenBuf = Buffer.from(token);
-  const secretBuf = Buffer.from(secret);
-  if (
-    tokenBuf.length !== secretBuf.length ||
-    !crypto.timingSafeEqual(tokenBuf, secretBuf)
-  ) {
-    res.status(401).json({ error: "Unauthorized" });
-    return;
-  }
+  const token = getBearerToken(req.header("authorization"));
+  return token === expected;
+};
 
-  next();
-}
-
-// ---------------------------------------------------------------------------
-// CSV helpers
-// ---------------------------------------------------------------------------
-
-const CSV_HEADER =
-  "id,payer,recipient,status,ratePerSecond,startTime,endTime,totalAmount,lastSettledAt,createdAt,updatedAt\r\n";
-
-/** RFC 4180-compliant field escaping. */
-function escapeCsvField(value: string): string {
-  if (/[,"\r\n]/.test(value)) {
-    return `"${value.replace(/"/g, '""')}"`;
-  }
-  return value;
-}
-
-function rowToCsvLine(stream: Stream): string {
-  const fields: string[] = [
-    stream.id,
-    stream.payer,
-    stream.recipient,
-    stream.status,
-    stream.ratePerSecond,
-    stream.startTime.toISOString(),
-    stream.endTime ? stream.endTime.toISOString() : "",
-    stream.totalAmount,
-    stream.lastSettledAt.toISOString(),
-    stream.createdAt.toISOString(),
-    stream.updatedAt.toISOString(),
-  ];
-  return fields.map(escapeCsvField).join(",") + "\r\n";
-}
-
-// ---------------------------------------------------------------------------
-// GET /api/v1/streams/export.csv
-// ---------------------------------------------------------------------------
-//
-// Registered BEFORE /:id so Express does not treat "export.csv" as a UUID.
-//
-// Auth:    Bearer <JWT_SECRET>
-// Filters: ?payer=&recipient=&status=   (same as the list endpoint)
-// Response: chunked text/csv stream — memory-safe regardless of dataset size.
-
-/**
- * @openapi
- * /api/v1/streams/export.csv:
- *   get:
- *     summary: Export streams as CSV
- *     description: >
- *       Streams a CSV file containing all streams that match the supplied
- *       filters.  Rows are fetched from the database in cursor-based batches
- *       so memory usage is bounded regardless of dataset size.
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: query
- *         name: payer
- *         schema: { type: string }
- *       - in: query
- *         name: recipient
- *         schema: { type: string }
- *       - in: query
- *         name: status
- *         schema: { type: string, enum: [active, paused, cancelled, completed] }
- *     responses:
- *       200:
- *         description: CSV file download
- *         content:
- *           text/csv:
- *             schema: { type: string }
- *       401:
- *         description: Missing or invalid Bearer token
- */
-router.get("/export.csv", requireAuth, async (req: Request, res: Response) => {
-  try {
-    const { payer, recipient, status } = req.query;
-
-    const filters: Pick<ExportParams, "payer" | "recipient" | "status"> = {
-      payer: payer as string | undefined,
-      recipient: recipient as string | undefined,
-      status: status as ExportParams["status"],
-    };
-
-    res.setHeader("Content-Type", "text/csv; charset=utf-8");
-    res.setHeader(
-      "Content-Disposition",
-      'attachment; filename="streams-export.csv"'
-    );
-
-    res.write(CSV_HEADER);
-
-    let cursor: { createdAt: Date; id: string } | undefined;
-
-    while (true) {
-      const batch = await streamRepository.findForExport({
-        ...filters,
-        cursorCreatedAt: cursor?.createdAt,
-        cursorId: cursor?.id,
-      });
-
-      for (const row of batch.rows) {
-        res.write(rowToCsvLine(row));
-      }
-
-      if (!batch.nextCursor) break;
-      cursor = batch.nextCursor;
-    }
-
-    res.end();
-  } catch (error) {
-    console.error("Error exporting streams CSV:", error);
-    if (!res.headersSent) {
-      res.status(500).json({ error: "Internal server error" });
-    } else {
-      res.end();
-    }
-  }
-});
-
-// GET /api/v1/streams/:id
-router.get("/:id", async (req: Request, res: Response) => {
+// GET /api/v1/streams/:id/accrual-preview
+router.get("/:id/accrual-preview", async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 
-    // Basic UUID validation (regex)
+    // UUID validation
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(id)) {
       return res.status(400).json({ error: "Invalid stream ID format" });
@@ -176,33 +44,115 @@ router.get("/:id", async (req: Request, res: Response) => {
       return res.status(404).json({ error: "Stream not found" });
     }
 
-    res.json(stream);
+    const preview = accrualService.calculateAccrual(stream);
+
+    res.json({
+      ...preview,
+      disclaimer: "This value is an estimate based on database records and contract formula. It may differ from the actual on-chain state due to indexing latency or pending transactions.",
+      note: "This endpoint is under heavy rate limiting.",
+    });
   } catch (error) {
-    console.error("Error fetching stream:", error);
+    console.error("Error generating accrual preview:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /api/v1/streams/:id
+router.get(
+  "/:id",
+  validate({ params: uuidParamSchema }),
+  async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+
+      const stream = await streamRepository.findById(id);
+
+      if (!stream) {
+        return res.status(404).json({ error: "Stream not found" });
+      }
+
+      res.json(stream);
+    } catch (error) {
+      console.error("Error fetching stream:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  },
+);
+
+// PATCH /api/v1/streams/:id
+router.patch("/:id", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body as Partial<UpdateStreamParams> & { updatedAt?: string };
+
+    if (!uuidRegex.test(id)) {
+      return res.status(400).json({ error: "Invalid stream ID format" });
+    }
+
+    // Validate writable fields whitelist
+    const allowedFields = ["labels", "offChainMemo", "status", "updatedAt"];
+    const invalidFields = Object.keys(updates).filter(field => !allowedFields.includes(field));
+    if (invalidFields.length > 0) {
+      return res.status(400).json({ error: `Invalid fields: ${invalidFields.join(", ")}` });
+    }
+
+    // Validate status if provided
+    if (updates.status && !["active", "paused", "cancelled", "completed"].includes(updates.status)) {
+      return res.status(400).json({ error: "Invalid status value" });
+    }
+
+    // Validate labels if provided (should be array of strings)
+    if (updates.labels !== undefined && (!Array.isArray(updates.labels) || !updates.labels.every(label => typeof label === "string"))) {
+      return res.status(400).json({ error: "Labels must be an array of strings" });
+    }
+
+    // Validate offChainMemo if provided (should be string or null)
+    if (updates.offChainMemo !== undefined && updates.offChainMemo !== null && typeof updates.offChainMemo !== "string") {
+      return res.status(400).json({ error: "offChainMemo must be a string or null" });
+    }
+
+    // Parse updatedAt if provided for optimistic locking
+    let currentUpdatedAt: Date | undefined;
+    if (updates.updatedAt) {
+      currentUpdatedAt = new Date(updates.updatedAt);
+      if (isNaN(currentUpdatedAt.getTime())) {
+        return res.status(400).json({ error: "Invalid updatedAt format" });
+      }
+      delete updates.updatedAt; // Remove from updates as it's for locking
+    }
+
+    const updatedStream = await streamRepository.updateById(id, updates as UpdateStreamParams, currentUpdatedAt);
+
+    if (!updatedStream) {
+      return res.status(404).json({ error: "Stream not found or update conflict" });
+    }
+
+    // Return the updated stream with accruedEstimate
+    const streamWithEstimate = await streamRepository.findById(id);
+    res.json(streamWithEstimate);
+  } catch (error) {
+    console.error("Error updating stream:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });
 
 // GET /api/v1/streams
-router.get("/", async (req: Request, res: Response) => {
-  try {
-    const { payer, recipient, status, limit, offset } = req.query;
+router.get(
+  "/",
+  validate({ query: getStreamsQuerySchema }),
+  async (req: Request, res: Response) => {
+    try {
+      const params = req.query;
 
-    const params: FindAllParams = {
-      payer: payer as string | undefined,
-      recipient: recipient as string | undefined,
-      status: status as FindAllParams["status"],
-      limit: limit ? parseInt(limit as string, 10) : undefined,
-      offset: offset ? parseInt(offset as string, 10) : undefined,
-    };
+      const result = await streamRepository.findAll(params);
 
-    const result = await streamRepository.findAll(params);
-
-    res.json(result);
-  } catch (error) {
-    console.error("Error fetching streams:", error);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
+      res.json(result);
+    } catch (error) {
+      console.error("Error fetching streams:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  },
+);
 
 export default router;
+
