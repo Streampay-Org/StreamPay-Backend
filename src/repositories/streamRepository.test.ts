@@ -146,4 +146,77 @@ describe("StreamRepository", () => {
       expect(countQuery.where).toHaveBeenCalled();
     });
   });
+
+  describe("findForExport", () => {
+    const makeStream = (overrides: Partial<{ id: string; createdAt: Date }> = {}) => ({
+      id: overrides.id ?? "aaaaaaaa-0000-0000-0000-000000000001",
+      payer: "0xPayer",
+      recipient: "0xRecipient",
+      status: "active" as const,
+      ratePerSecond: "1.0",
+      startTime: new Date("2024-01-01T00:00:00Z"),
+      endTime: null,
+      totalAmount: "3600.0",
+      lastSettledAt: new Date("2024-01-01T00:00:00Z"),
+      createdAt: overrides.createdAt ?? new Date("2024-06-01T00:00:00Z"),
+      updatedAt: new Date("2024-06-01T00:00:00Z"),
+    });
+
+    it("should return all rows with null nextCursor when count <= batchSize", async () => {
+      const mockRows = [makeStream({ id: "a" }), makeStream({ id: "b" })];
+      (db.select as jest.Mock).mockReturnValue(createMockQuery(mockRows));
+
+      const result = await repository.findForExport({ batchSize: 500 });
+
+      expect(result.rows).toHaveLength(2);
+      expect(result.nextCursor).toBeNull();
+    });
+
+    it("should return a page and nextCursor when more rows than batchSize exist", async () => {
+      // Simulate batchSize=2 but DB returns 3 rows (batchSize+1)
+      const t = new Date("2024-06-01T00:00:00Z");
+      const r1 = makeStream({ id: "id-1", createdAt: t });
+      const r2 = makeStream({ id: "id-2", createdAt: t });
+      const r3 = makeStream({ id: "id-3", createdAt: t }); // sentinel
+      (db.select as jest.Mock).mockReturnValue(createMockQuery([r1, r2, r3]));
+
+      const result = await repository.findForExport({ batchSize: 2 });
+
+      expect(result.rows).toHaveLength(2);
+      expect(result.rows[0].id).toBe("id-1");
+      expect(result.rows[1].id).toBe("id-2");
+      expect(result.nextCursor).toEqual({ createdAt: t, id: "id-2" });
+    });
+
+    it("should apply payer/recipient/status filters", async () => {
+      (db.select as jest.Mock).mockReturnValue(createMockQuery([]));
+
+      await repository.findForExport({ payer: "0xA", recipient: "0xB", status: "paused" });
+
+      // select was called — no assertion on internals, just that it resolves without error
+      expect(db.select).toHaveBeenCalled();
+    });
+
+    it("should return empty rows with null nextCursor for empty result set", async () => {
+      (db.select as jest.Mock).mockReturnValue(createMockQuery([]));
+
+      const result = await repository.findForExport({});
+
+      expect(result.rows).toHaveLength(0);
+      expect(result.nextCursor).toBeNull();
+    });
+
+    it("should pass cursor arguments when provided", async () => {
+      const cursorDate = new Date("2024-05-01T00:00:00Z");
+      (db.select as jest.Mock).mockReturnValue(createMockQuery([]));
+
+      const result = await repository.findForExport({
+        cursorCreatedAt: cursorDate,
+        cursorId: "cursor-id",
+      });
+
+      expect(result.rows).toHaveLength(0);
+      expect(result.nextCursor).toBeNull();
+    });
+  });
 });

@@ -1,4 +1,4 @@
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, or, desc, lt, sql } from "drizzle-orm";
 import { db } from "../db/index";
 import { streams, Stream, NewStream } from "../db/schema";
 
@@ -16,6 +16,23 @@ export interface UpdateStreamParams {
   offChainMemo?: string;
   status?: "active" | "paused" | "cancelled" | "completed";
   updatedAt?: Date;
+}
+
+export interface ExportParams {
+  payer?: string;
+  recipient?: string;
+  status?: "active" | "paused" | "cancelled" | "completed";
+  /** Exclusive cursor: resume after this (createdAt, id) pair (both must be set together). */
+  cursorCreatedAt?: Date;
+  cursorId?: string;
+  /** Number of rows per DB fetch (default 500). */
+  batchSize?: number;
+}
+
+export interface ExportBatch {
+  rows: Stream[];
+  /** null when this is the last page. */
+  nextCursor: { createdAt: Date; id: string } | null;
 }
 
 export class StreamRepository {
