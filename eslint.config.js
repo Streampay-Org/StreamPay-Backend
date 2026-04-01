@@ -20,6 +20,7 @@ module.exports = [
     },
     rules: {
       ...tseslint.configs.recommended.rules,
+      "@typescript-eslint/no-require-imports": "off",
     },
   },
 ];

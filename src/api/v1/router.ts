@@ -1,5 +1,6 @@
 import { Router, Request, Response, NextFunction } from "express";
 import streamsRouter from "./streams";
+import webhooksRouter from "./webhooks";
 
 const v1Router = Router();
 
@@ -10,7 +11,7 @@ v1Router.use((_req: Request, res: Response, next: NextFunction) => {
     next();
 });
 
-// Mount existing streams logic
 v1Router.use("/streams", streamsRouter);
+v1Router.use("/webhooks", webhooksRouter);
 
 export default v1Router;
