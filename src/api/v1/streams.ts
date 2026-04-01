@@ -27,6 +27,36 @@ const isProtectedActionAuthorized = (req: Request): boolean => {
   return token === expected;
 };
 
+// GET /api/v1/streams/:id/accrual-preview
+router.get("/:id/accrual-preview", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    // UUID validation
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(id)) {
+      return res.status(400).json({ error: "Invalid stream ID format" });
+    }
+
+    const stream = await streamRepository.findById(id);
+
+    if (!stream) {
+      return res.status(404).json({ error: "Stream not found" });
+    }
+
+    const preview = accrualService.calculateAccrual(stream);
+
+    res.json({
+      ...preview,
+      disclaimer: "This value is an estimate based on database records and contract formula. It may differ from the actual on-chain state due to indexing latency or pending transactions.",
+      note: "This endpoint is under heavy rate limiting.",
+    });
+  } catch (error) {
+    console.error("Error generating accrual preview:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // GET /api/v1/streams/:id
 router.get(
   "/:id",
