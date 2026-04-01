@@ -57,6 +57,22 @@ Example:
 CORS_ALLOWED_ORIGINS=https://app.streampay.com,https://admin.streampay.com
 ```
 
+## API Key Authentication (Service-to-Service and Webhooks)
+
+The backend supports API key authentication for internal jobs and partner integrations, distinct from user JWT flows.
+
+- Header: `x-api-key` or `Authorization: ApiKey <key>`
+- Keys are hashed with SHA-256 at rest
+- Constant-time comparison via `crypto.timingSafeEqual`
+- Revoked keys are rejected and treated as invalid
+
+Set environment variable(s) before starting:
+
+- `API_KEYS`: comma-separated plaintext keys (development/test only)
+- `API_KEY_HASHES`: comma-separated SHA256 hashes (production / at-rest hashes)
+
+Add `x-api-key` to `/api/v1/*` and `/webhooks/indexer` requests.
+
 ## Indexer webhook ingestion
 
 The backend now exposes `POST /webhooks/indexer` for trusted chain-indexer events such as `stream_created` and `settled`.
