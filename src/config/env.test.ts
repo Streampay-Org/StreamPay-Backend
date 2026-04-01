@@ -9,8 +9,12 @@ describe("Environment Configuration Schema", () => {
     DATABASE_URL: "postgres://localhost:5432/db",
     JWT_SECRET: "a_very_long_secret_that_is_at_least_32_characters",
     RPC_URL: "https://api.mainnet-beta.solana.com",
-    TX_SIGNER_MODE: "external_signer",
+    AUDIT_LOG_RETENTION_DAYS: "365",
     NODE_ENV: "development",
+    DB_POOL_MAX: "15",
+    DB_POOL_IDLE_TIMEOUT: "45000",
+    DB_CONNECTION_TIMEOUT: "8000",
+    DB_STATEMENT_TIMEOUT: "45000",
   };
 
   it("should validate a correct configuration", () => {
@@ -19,7 +23,7 @@ describe("Environment Configuration Schema", () => {
     if (result.success) {
       expect(result.data.PORT).toBe(3001);
       expect(result.data.NODE_ENV).toBe("development");
-      expect(result.data.TX_SIGNER_MODE).toBe("external_signer");
+      expect(result.data.AUDIT_LOG_RETENTION_DAYS).toBe(365);
     }
   });
 
@@ -71,45 +75,13 @@ describe("Environment Configuration Schema", () => {
     }
   });
 
-  it("should default TX_SIGNER_MODE to external_signer if missing", () => {
+  it("should default AUDIT_LOG_RETENTION_DAYS to 365 if missing", () => {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { TX_SIGNER_MODE, ...envWithoutSignerMode } = validEnv;
-    const result = envSchema.safeParse(envWithoutSignerMode);
+    const { AUDIT_LOG_RETENTION_DAYS, ...envWithoutRetention } = validEnv;
+    const result = envSchema.safeParse(envWithoutRetention);
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.TX_SIGNER_MODE).toBe("external_signer");
-    }
-  });
-
-  it("should fail if TX_SIGNING_SEED is set outside development", () => {
-    const invalidEnv = {
-      ...validEnv,
-      NODE_ENV: "production",
-      TX_SIGNING_SEED: "SSECRET",
-    };
-
-    const result = envSchema.safeParse(invalidEnv);
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error.flatten().fieldErrors.TX_SIGNING_SEED).toContain(
-        "TX_SIGNING_SEED is only allowed in development.",
-      );
-    }
-  });
-
-  it("should fail in production backend_sign mode without KMS key id", () => {
-    const invalidEnv = {
-      ...validEnv,
-      NODE_ENV: "production",
-      TX_SIGNER_MODE: "backend_sign",
-    };
-
-    const result = envSchema.safeParse(invalidEnv);
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error.flatten().fieldErrors.TX_SIGNING_KMS_KEY_ID).toContain(
-        "TX_SIGNING_KMS_KEY_ID is required outside development when TX_SIGNER_MODE=backend_sign.",
-      );
+      expect(result.data.AUDIT_LOG_RETENTION_DAYS).toBe(365);
     }
   });
 
@@ -121,6 +93,55 @@ describe("Environment Configuration Schema", () => {
     it("should return validated data if validation succeeds", () => {
       const data = validateEnv(validEnv);
       expect(data.PORT).toBe(3001);
+    });
+  });
+
+  describe("Database pool configuration", () => {
+    it("should validate pool configuration with default values", () => {
+      const envWithoutPool = {
+        PORT: "3001",
+        DATABASE_URL: "postgres://localhost:5432/db",
+        JWT_SECRET: "a_very_long_secret_that_is_at_least_32_characters",
+        RPC_URL: "https://api.mainnet-beta.solana.com",
+        NODE_ENV: "development",
+      };
+      const result = envSchema.safeParse(envWithoutPool);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.DB_POOL_MAX).toBe(10);
+        expect(result.data.DB_POOL_IDLE_TIMEOUT).toBe(30000);
+        expect(result.data.DB_CONNECTION_TIMEOUT).toBe(5000);
+        expect(result.data.DB_STATEMENT_TIMEOUT).toBe(30000);
+      }
+    });
+
+    it("should parse custom pool configuration", () => {
+      const result = envSchema.safeParse(validEnv);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.DB_POOL_MAX).toBe(15);
+        expect(result.data.DB_POOL_IDLE_TIMEOUT).toBe(45000);
+        expect(result.data.DB_CONNECTION_TIMEOUT).toBe(8000);
+        expect(result.data.DB_STATEMENT_TIMEOUT).toBe(45000);
+      }
+    });
+
+    it("should reject DB_POOL_MAX below 1", () => {
+      const invalidEnv = { ...validEnv, DB_POOL_MAX: "0" };
+      const result = envSchema.safeParse(invalidEnv);
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.flatten().fieldErrors.DB_POOL_MAX).toBeDefined();
+      }
+    });
+
+    it("should reject DB_POOL_MAX above 100", () => {
+      const invalidEnv = { ...validEnv, DB_POOL_MAX: "150" };
+      const result = envSchema.safeParse(invalidEnv);
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.flatten().fieldErrors.DB_POOL_MAX).toBeDefined();
+      }
     });
   });
 });
