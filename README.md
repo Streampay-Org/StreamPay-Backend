@@ -37,7 +37,25 @@ Node.js + Express (TypeScript) service that will power the StreamPay API gateway
    npm run build && npm start
    ```
 
-API will be at `http://localhost:3001` (or `PORT` env). Try `GET /health` and `GET /api/streams`.
+API will be at `http://localhost:3001` (or `PORT` env). 
+
+- **Health Check**: `GET /health`
+- **Streams API**: `GET /api/v1/streams`
+- **OpenAPI Spec**: `GET /api/openapi.json`
+
+## CORS configuration
+
+The API now uses an environment-driven CORS allowlist.
+
+- Development / test: if `CORS_ALLOWED_ORIGINS` is unset, requests are allowed for any origin.
+- Production: `CORS_ALLOWED_ORIGINS` is required and must be a comma-separated list.
+- Wildcard (`*`) is rejected in production.
+
+Example:
+
+```env
+CORS_ALLOWED_ORIGINS=https://app.streampay.com,https://admin.streampay.com
+```
 
 ## Indexer webhook ingestion
 
