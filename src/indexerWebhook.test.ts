@@ -1,9 +1,9 @@
 import crypto from "crypto";
-
 import request from "supertest";
-
 import app from "./index";
+
 import { eventIngestionService } from "./services/eventIngestionService";
+import { refreshApiKeyStore } from "./middleware/apiKeyAuth";
 
 const secret = "test-indexer-secret";
 
@@ -27,11 +27,14 @@ function sign(body: string): string {
 describe("POST /webhooks/indexer", () => {
   beforeEach(() => {
     process.env.INDEXER_WEBHOOK_SECRET = secret;
+    process.env.API_KEYS = "test-1234";
+    refreshApiKeyStore();
     eventIngestionService.reset();
   });
 
   afterAll(() => {
     delete process.env.INDEXER_WEBHOOK_SECRET;
+    delete process.env.API_KEYS;
     eventIngestionService.reset();
   });
 
@@ -41,6 +44,7 @@ describe("POST /webhooks/indexer", () => {
     const res = await request(app)
       .post("/webhooks/indexer")
       .set("Content-Type", "application/json")
+      .set("x-api-key", "test-1234")
       .set("x-indexer-signature", sign(body))
       .send(body);
 
@@ -59,6 +63,7 @@ describe("POST /webhooks/indexer", () => {
     const res = await request(app)
       .post("/webhooks/indexer")
       .set("Content-Type", "application/json")
+      .set("x-api-key", "test-1234")
       .set("x-indexer-signature", "sha256=deadbeef")
       .send(body);
 
@@ -75,12 +80,14 @@ describe("POST /webhooks/indexer", () => {
     const firstResponse = await request(app)
       .post("/webhooks/indexer")
       .set("Content-Type", "application/json")
+      .set("x-api-key", "test-1234")
       .set("x-indexer-signature", signature)
       .send(body);
 
     const secondResponse = await request(app)
       .post("/webhooks/indexer")
       .set("Content-Type", "application/json")
+      .set("x-api-key", "test-1234")
       .set("x-indexer-signature", signature)
       .send(body);
 
@@ -101,6 +108,7 @@ describe("POST /webhooks/indexer", () => {
     const res = await request(app)
       .post("/webhooks/indexer")
       .set("Content-Type", "application/json")
+      .set("x-api-key", "test-1234")
       .set("x-indexer-signature", sign(body))
       .send(body);
 
@@ -111,11 +119,12 @@ describe("POST /webhooks/indexer", () => {
   });
 
   it("rejects malformed JSON even with a valid signature", async () => {
-    const body = "{\"eventId\":";
+    const body = '{"eventId":';
 
     const res = await request(app)
       .post("/webhooks/indexer")
       .set("Content-Type", "application/json")
+      .set("x-api-key", "test-1234")
       .set("x-indexer-signature", sign(body))
       .send(body);
 
@@ -134,6 +143,7 @@ describe("POST /webhooks/indexer", () => {
     const res = await request(app)
       .post("/webhooks/indexer")
       .set("Content-Type", "application/json")
+      .set("x-api-key", "test-1234")
       .set("x-indexer-signature", sign(body))
       .send(body);
 
@@ -149,6 +159,7 @@ describe("POST /webhooks/indexer", () => {
     const res = await request(app)
       .post("/webhooks/indexer")
       .set("Content-Type", "text/plain")
+      .set("x-api-key", "test-1234")
       .set("x-indexer-signature", sign(body))
       .send(body);
 

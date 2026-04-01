@@ -8,14 +8,25 @@ export interface FindAllParams {
   status?: "active" | "paused" | "cancelled" | "completed";
   limit?: number;
   offset?: number;
+  includeDeleted?: boolean;
+}
+
+export interface UpdateStreamParams {
+  labels?: string[];
+  offChainMemo?: string;
+  status?: "active" | "paused" | "cancelled" | "completed";
+  updatedAt?: Date;
 }
 
 export class StreamRepository {
-  async findById(id: string): Promise<(Stream & { accruedEstimate: string }) | null> {
+  async findById(id: string, includeDeleted = false): Promise<(Stream & { accruedEstimate: string }) | null> {
+    const conditions = [eq(streams.id, id)];
+    if (!includeDeleted) conditions.push(sql`${streams.deletedAt} IS NULL`);
+
     const [result] = await db
       .select()
       .from(streams)
-      .where(eq(streams.id, id))
+      .where(and(...conditions))
       .limit(1);
 
     if (!result) return null;
@@ -37,6 +48,10 @@ export class StreamRepository {
     if (params.recipient) conditions.push(eq(streams.recipient, params.recipient));
     if (params.status) conditions.push(eq(streams.status, params.status));
 
+    if (!params.includeDeleted) {
+      conditions.push(sql`${streams.deletedAt} IS NULL`);
+    }
+
     const query = db
       .select()
       .from(streams)
@@ -46,7 +61,7 @@ export class StreamRepository {
       .offset(offset);
 
     const data = await query;
-    
+
     // For total count
     const [countResult] = await db
       .select({ count: sql<number>`count(*)` })
@@ -61,18 +76,38 @@ export class StreamRepository {
     };
   }
 
+  async updateById(id: string, updates: UpdateStreamParams, currentUpdatedAt?: Date): Promise<Stream | null> {
+    const updateData: Partial<Stream> = {
+      ...updates,
+      updatedAt: new Date(),
+    };
+
+    const conditions = [eq(streams.id, id)];
+    if (currentUpdatedAt) {
+      conditions.push(eq(streams.updatedAt, currentUpdatedAt));
+    }
+
+    const result = await db
+      .update(streams)
+      .set(updateData)
+      .where(and(...conditions))
+      .returning();
+
+    return result[0] || null;
+  }
+
   private calculateAccruedEstimate(stream: Stream): number {
     if (stream.status !== "active") return 0;
 
     const now = new Date();
     const startTime = new Date(stream.lastSettledAt);
     const endTime = stream.endTime ? new Date(stream.endTime) : null;
-    
+
     const effectiveNow = endTime && now > endTime ? endTime : now;
-    
+
     const elapsedSeconds = Math.max(0, (effectiveNow.getTime() - startTime.getTime()) / 1000);
     const rate = parseFloat(stream.ratePerSecond);
-    
+
     return elapsedSeconds * rate;
   }
 }
