@@ -9,7 +9,12 @@ describe("Environment Configuration Schema", () => {
     DATABASE_URL: "postgres://localhost:5432/db",
     JWT_SECRET: "a_very_long_secret_that_is_at_least_32_characters",
     RPC_URL: "https://api.mainnet-beta.solana.com",
+    AUDIT_LOG_RETENTION_DAYS: "365",
     NODE_ENV: "development",
+    DB_POOL_MAX: "15",
+    DB_POOL_IDLE_TIMEOUT: "45000",
+    DB_CONNECTION_TIMEOUT: "8000",
+    DB_STATEMENT_TIMEOUT: "45000",
   };
 
   it("should validate a correct configuration", () => {
@@ -18,6 +23,7 @@ describe("Environment Configuration Schema", () => {
     if (result.success) {
       expect(result.data.PORT).toBe(3001);
       expect(result.data.NODE_ENV).toBe("development");
+      expect(result.data.AUDIT_LOG_RETENTION_DAYS).toBe(365);
     }
   });
 
@@ -49,6 +55,25 @@ describe("Environment Configuration Schema", () => {
     }
   });
 
+  it("should fail if SOROBAN_RPC_URL is not a valid URL", () => {
+    const invalidEnv = { ...validEnv, SOROBAN_RPC_URL: "bad-url" };
+    const result = envSchema.safeParse(invalidEnv);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.flatten().fieldErrors).toHaveProperty("SOROBAN_RPC_URL");
+    }
+  });
+
+  it("should fail if SOROBAN_NETWORK_PASSPHRASE is missing", () => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { SOROBAN_NETWORK_PASSPHRASE, ...invalidEnv } = validEnv;
+    const result = envSchema.safeParse(invalidEnv);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.flatten().fieldErrors).toHaveProperty("SOROBAN_NETWORK_PASSPHRASE");
+    }
+  });
+
   it("should default PORT to 3001 if missing", () => {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { PORT, ...envWithoutPort } = validEnv;
@@ -69,6 +94,16 @@ describe("Environment Configuration Schema", () => {
     }
   });
 
+  it("should default AUDIT_LOG_RETENTION_DAYS to 365 if missing", () => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { AUDIT_LOG_RETENTION_DAYS, ...envWithoutRetention } = validEnv;
+    const result = envSchema.safeParse(envWithoutRetention);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.AUDIT_LOG_RETENTION_DAYS).toBe(365);
+    }
+  });
+
   describe("validateEnv function", () => {
     it("should throw in test environment if validation fails", () => {
       expect(() => validateEnv({})).toThrow("Invalid environment variables");
@@ -77,6 +112,55 @@ describe("Environment Configuration Schema", () => {
     it("should return validated data if validation succeeds", () => {
       const data = validateEnv(validEnv);
       expect(data.PORT).toBe(3001);
+    });
+  });
+
+  describe("Database pool configuration", () => {
+    it("should validate pool configuration with default values", () => {
+      const envWithoutPool = {
+        PORT: "3001",
+        DATABASE_URL: "postgres://localhost:5432/db",
+        JWT_SECRET: "a_very_long_secret_that_is_at_least_32_characters",
+        RPC_URL: "https://api.mainnet-beta.solana.com",
+        NODE_ENV: "development",
+      };
+      const result = envSchema.safeParse(envWithoutPool);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.DB_POOL_MAX).toBe(10);
+        expect(result.data.DB_POOL_IDLE_TIMEOUT).toBe(30000);
+        expect(result.data.DB_CONNECTION_TIMEOUT).toBe(5000);
+        expect(result.data.DB_STATEMENT_TIMEOUT).toBe(30000);
+      }
+    });
+
+    it("should parse custom pool configuration", () => {
+      const result = envSchema.safeParse(validEnv);
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.DB_POOL_MAX).toBe(15);
+        expect(result.data.DB_POOL_IDLE_TIMEOUT).toBe(45000);
+        expect(result.data.DB_CONNECTION_TIMEOUT).toBe(8000);
+        expect(result.data.DB_STATEMENT_TIMEOUT).toBe(45000);
+      }
+    });
+
+    it("should reject DB_POOL_MAX below 1", () => {
+      const invalidEnv = { ...validEnv, DB_POOL_MAX: "0" };
+      const result = envSchema.safeParse(invalidEnv);
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.flatten().fieldErrors.DB_POOL_MAX).toBeDefined();
+      }
+    });
+
+    it("should reject DB_POOL_MAX above 100", () => {
+      const invalidEnv = { ...validEnv, DB_POOL_MAX: "150" };
+      const result = envSchema.safeParse(invalidEnv);
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.flatten().fieldErrors.DB_POOL_MAX).toBeDefined();
+      }
     });
   });
 });

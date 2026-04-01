@@ -1,65 +1,38 @@
 import { Router, Request, Response } from "express";
-import { z } from "zod";
-import { StreamRepository, FindAllParams } from "../../repositories/streamRepository";
+import { StreamRepository } from "../../repositories/streamRepository";
+import { validate } from "../../middleware/validate";
+import {
+  getStreamsQuerySchema,
+  uuidParamSchema,
+} from "../../validation/schemas";
 
 const router = Router();
 const streamRepository = new StreamRepository();
+const auditService = new AuditService();
 
-const createStreamSchema = z.object({
-  payer: z.string().min(1, "payer is required"),
-  recipient: z.string().min(1, "recipient is required"),
-  ratePerSecond: z
-    .string()
-    .regex(/^\d+(\.\d+)?$/, "ratePerSecond must be a positive decimal string"),
-  startTime: z.string().datetime({ message: "startTime must be an ISO-8601 datetime" }),
-  endTime: z
-    .string()
-    .datetime({ message: "endTime must be an ISO-8601 datetime" })
-    .optional(),
-  totalAmount: z
-    .string()
-    .regex(/^\d+(\.\d+)?$/, "totalAmount must be a positive decimal string"),
-});
+const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-type CreateStreamBody = z.infer<typeof createStreamSchema>;
+const getBearerToken = (authorizationHeader?: string): string | null => {
+  if (!authorizationHeader) return null;
+  const [scheme, token] = authorizationHeader.split(" ");
+  if (scheme !== "Bearer" || !token) return null;
+  return token;
+};
 
-// POST /api/v1/streams
-router.post("/", async (req: Request, res: Response) => {
-  try {
-    const parsed = createStreamSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({
-        error: "Validation failed",
-        details: parsed.error.flatten().fieldErrors,
-      });
-    }
+const isProtectedActionAuthorized = (req: Request): boolean => {
+  const expected = process.env.JWT_SECRET;
+  if (!expected) return false;
 
-    const body = parsed.data as CreateStreamBody;
+  const token = getBearerToken(req.header("authorization"));
+  return token === expected;
+};
 
-    const stream = await streamRepository.create({
-      payer: body.payer,
-      recipient: body.recipient,
-      ratePerSecond: body.ratePerSecond,
-      startTime: new Date(body.startTime),
-      endTime: body.endTime ? new Date(body.endTime) : undefined,
-      totalAmount: body.totalAmount,
-      status: "active",
-      lastSettledAt: new Date(body.startTime),
-    });
-
-    return res.status(201).json(stream);
-  } catch (error) {
-    console.error("Error creating stream:", error);
-    return res.status(500).json({ error: "Internal server error" });
-  }
-});
-
-// GET /api/v1/streams/:id
-router.get("/:id", async (req: Request, res: Response) => {
+// GET /api/v1/streams/:id/accrual-preview
+router.get("/:id/accrual-preview", async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 
-    // Basic UUID validation (regex)
+    // UUID validation
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(id)) {
       return res.status(400).json({ error: "Invalid stream ID format" });
@@ -71,33 +44,115 @@ router.get("/:id", async (req: Request, res: Response) => {
       return res.status(404).json({ error: "Stream not found" });
     }
 
-    res.json(stream);
+    const preview = accrualService.calculateAccrual(stream);
+
+    res.json({
+      ...preview,
+      disclaimer: "This value is an estimate based on database records and contract formula. It may differ from the actual on-chain state due to indexing latency or pending transactions.",
+      note: "This endpoint is under heavy rate limiting.",
+    });
   } catch (error) {
-    console.error("Error fetching stream:", error);
+    console.error("Error generating accrual preview:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /api/v1/streams/:id
+router.get(
+  "/:id",
+  validate({ params: uuidParamSchema }),
+  async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+
+      const stream = await streamRepository.findById(id);
+
+      if (!stream) {
+        return res.status(404).json({ error: "Stream not found" });
+      }
+
+      res.json(stream);
+    } catch (error) {
+      console.error("Error fetching stream:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  },
+);
+
+// PATCH /api/v1/streams/:id
+router.patch("/:id", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body as Partial<UpdateStreamParams> & { updatedAt?: string };
+
+    if (!uuidRegex.test(id)) {
+      return res.status(400).json({ error: "Invalid stream ID format" });
+    }
+
+    // Validate writable fields whitelist
+    const allowedFields = ["labels", "offChainMemo", "status", "updatedAt"];
+    const invalidFields = Object.keys(updates).filter(field => !allowedFields.includes(field));
+    if (invalidFields.length > 0) {
+      return res.status(400).json({ error: `Invalid fields: ${invalidFields.join(", ")}` });
+    }
+
+    // Validate status if provided
+    if (updates.status && !["active", "paused", "cancelled", "completed"].includes(updates.status)) {
+      return res.status(400).json({ error: "Invalid status value" });
+    }
+
+    // Validate labels if provided (should be array of strings)
+    if (updates.labels !== undefined && (!Array.isArray(updates.labels) || !updates.labels.every(label => typeof label === "string"))) {
+      return res.status(400).json({ error: "Labels must be an array of strings" });
+    }
+
+    // Validate offChainMemo if provided (should be string or null)
+    if (updates.offChainMemo !== undefined && updates.offChainMemo !== null && typeof updates.offChainMemo !== "string") {
+      return res.status(400).json({ error: "offChainMemo must be a string or null" });
+    }
+
+    // Parse updatedAt if provided for optimistic locking
+    let currentUpdatedAt: Date | undefined;
+    if (updates.updatedAt) {
+      currentUpdatedAt = new Date(updates.updatedAt);
+      if (isNaN(currentUpdatedAt.getTime())) {
+        return res.status(400).json({ error: "Invalid updatedAt format" });
+      }
+      delete updates.updatedAt; // Remove from updates as it's for locking
+    }
+
+    const updatedStream = await streamRepository.updateById(id, updates as UpdateStreamParams, currentUpdatedAt);
+
+    if (!updatedStream) {
+      return res.status(404).json({ error: "Stream not found or update conflict" });
+    }
+
+    // Return the updated stream with accruedEstimate
+    const streamWithEstimate = await streamRepository.findById(id);
+    res.json(streamWithEstimate);
+  } catch (error) {
+    console.error("Error updating stream:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });
 
 // GET /api/v1/streams
-router.get("/", async (req: Request, res: Response) => {
-  try {
-    const { payer, recipient, status, limit, offset } = req.query;
+router.get(
+  "/",
+  validate({ query: getStreamsQuerySchema }),
+  async (req: Request, res: Response) => {
+    try {
+      const params = req.query;
 
-    const params: FindAllParams = {
-      payer: payer as string | undefined,
-      recipient: recipient as string | undefined,
-      status: status as FindAllParams["status"],
-      limit: limit ? parseInt(limit as string, 10) : undefined,
-      offset: offset ? parseInt(offset as string, 10) : undefined,
-    };
+      const result = await streamRepository.findAll(params);
 
-    const result = await streamRepository.findAll(params);
-
-    res.json(result);
-  } catch (error) {
-    console.error("Error fetching streams:", error);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
+      res.json(result);
+    } catch (error) {
+      console.error("Error fetching streams:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  },
+);
 
 export default router;
+
