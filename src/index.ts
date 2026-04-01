@@ -4,12 +4,17 @@
 
 import cors from "cors";
 import express, { Request, Response } from "express";
-import v1Router from "./api/v1/router";
+import streamRoutes from "./api/v1/streams";
+import { generateOpenApi } from "./api/v1/openapi";
+import { metricsHandler, metricsMiddleware } from "./metrics/prometheus";
 
 import indexerWebhookRouter from "./routes/webhooks/indexer";
-import { globalRateLimiter } from "./middleware/rateLimit";
+import { metricsHandler, metricsMiddleware } from "./metrics/prometheus";
+
+import { metricsHandler, metricsMiddleware } from "./metrics/prometheus";
 
 import { env } from "./config/env";
+import { metricsHandler, metricsMiddleware } from "./metrics/prometheus";
 
 const app = express();
 const PORT = env.PORT;
@@ -18,15 +23,26 @@ app.get("/metrics", metricsHandler);
 app.use(metricsMiddleware);
 
 app.use(cors());
-app.use(globalRateLimiter);
-app.use("/webhooks/indexer", express.raw({ type: "application/json" }), indexerWebhookRouter);
+app.use(
+  "/webhooks/indexer",
+  express.raw({ type: "application/json" }),
+  indexerWebhookRouter,
+);
 app.use(express.json());
 
 app.get("/health", (_req: Request, res: Response) => {
-  res.json({ status: "ok", service: "streampay-backend", timestamp: new Date().toISOString() });
+  res.json({
+    status: "ok",
+    service: "streampay-backend",
+    timestamp: new Date().toISOString(),
+  });
 });
 
-app.use("/api/v1", v1Router);
+app.get("/api/openapi.json", (_req: Request, res: Response) => {
+  res.json(generateOpenApi());
+});
+
+app.use("/api/v1/streams", streamRoutes);
 
 if (require.main === module) {
   app.listen(PORT, () => {

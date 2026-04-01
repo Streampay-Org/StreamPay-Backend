@@ -15,14 +15,16 @@ describe("StreamRepository", () => {
     jest.clearAllMocks();
   });
 
-  const createMockQuery = <T>(value: T) => {
-    const query = {
+  const createMockQuery = (value: unknown) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const query: any = {
       from: jest.fn().mockReturnThis(),
       where: jest.fn().mockReturnThis(),
       orderBy: jest.fn().mockReturnThis(),
       limit: jest.fn().mockReturnThis(),
       offset: jest.fn().mockReturnThis(),
-      then: (onfulfilled: (value: T) => unknown) => Promise.resolve(value).then(onfulfilled),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      then: (onfulfilled: any) => Promise.resolve(value).then(onfulfilled),
     };
     return query;
   };
