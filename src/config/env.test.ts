@@ -55,6 +55,25 @@ describe("Environment Configuration Schema", () => {
     }
   });
 
+  it("should fail if SOROBAN_RPC_URL is not a valid URL", () => {
+    const invalidEnv = { ...validEnv, SOROBAN_RPC_URL: "bad-url" };
+    const result = envSchema.safeParse(invalidEnv);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.flatten().fieldErrors).toHaveProperty("SOROBAN_RPC_URL");
+    }
+  });
+
+  it("should fail if SOROBAN_NETWORK_PASSPHRASE is missing", () => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { SOROBAN_NETWORK_PASSPHRASE, ...invalidEnv } = validEnv;
+    const result = envSchema.safeParse(invalidEnv);
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.flatten().fieldErrors).toHaveProperty("SOROBAN_NETWORK_PASSPHRASE");
+    }
+  });
+
   it("should default PORT to 3001 if missing", () => {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { PORT, ...envWithoutPort } = validEnv;
