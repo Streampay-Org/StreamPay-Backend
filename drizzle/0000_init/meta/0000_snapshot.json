@@ -1,0 +1,25 @@
+CREATE TYPE "stream_status" AS ENUM('active', 'paused', 'cancelled', 'completed');
+
+CREATE TABLE IF NOT EXISTS "streams" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"payer" varchar(255) NOT NULL,
+	"recipient" varchar(255) NOT NULL,
+	"status" "stream_status" DEFAULT 'active' NOT NULL,
+	"rate_per_second" decimal(20, 9) NOT NULL,
+	"start_time" timestamp NOT NULL,
+	"end_time" timestamp,
+	"total_amount" decimal(20, 9) NOT NULL,
+	"last_settled_at" timestamp DEFAULT now() NOT NULL,
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	"updated_at" timestamp DEFAULT now() NOT NULL,
+	"chain_id" varchar(50) DEFAULT 'stellar-testnet' NOT NULL,
+	"contract_address" varchar(255),
+	"transaction_hash" varchar(66),
+	"metadata" text
+);
+
+CREATE INDEX IF NOT EXISTS "streams_payer_idx" ON "streams"("payer");
+CREATE INDEX IF NOT EXISTS "streams_recipient_idx" ON "streams"("recipient");
+CREATE INDEX IF NOT EXISTS "streams_status_idx" ON "streams"("status");
+CREATE INDEX IF NOT EXISTS "streams_chain_id_idx" ON "streams"("chain_id");
+CREATE INDEX IF NOT EXISTS "streams_created_at_idx" ON "streams"("created_at");

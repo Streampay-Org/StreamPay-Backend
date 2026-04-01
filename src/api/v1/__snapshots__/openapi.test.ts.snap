@@ -1,0 +1,387 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`OpenAPI Specification should match the snapshot 1`] = `
+{
+  "components": {
+    "parameters": {},
+    "schemas": {
+      "Error": {
+        "properties": {
+          "error": {
+            "description": "Error message",
+            "example": "Invalid stream ID format",
+            "type": "string",
+          },
+        },
+        "required": [
+          "error",
+        ],
+        "type": "object",
+      },
+      "Health": {
+        "properties": {
+          "service": {
+            "example": "streampay-backend",
+            "type": "string",
+          },
+          "status": {
+            "example": "ok",
+            "type": "string",
+          },
+          "timestamp": {
+            "example": "2024-03-24T20:00:00Z",
+            "type": "string",
+          },
+        },
+        "required": [
+          "status",
+          "service",
+          "timestamp",
+        ],
+        "type": "object",
+      },
+      "Stream": {
+        "properties": {
+          "accruedEstimate": {
+            "description": "Estimated accrued amount since last settlement",
+            "example": "0.05",
+            "type": "string",
+          },
+          "createdAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string",
+              },
+              {
+                "type": "string",
+              },
+            ],
+            "description": "Creation timestamp",
+            "example": "2024-03-24T19:00:00Z",
+          },
+          "endTime": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string",
+              },
+              {
+                "type": "string",
+              },
+              {
+                "nullable": true,
+              },
+            ],
+            "description": "End time of the stream (optional)",
+            "example": "2024-12-24T20:00:00Z",
+          },
+          "id": {
+            "description": "Unique identifier for the stream",
+            "example": "550e8400-e29b-411d-a716-446655440000",
+            "format": "uuid",
+            "type": "string",
+          },
+          "lastSettledAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string",
+              },
+              {
+                "type": "string",
+              },
+            ],
+            "description": "Last time the stream was settled",
+            "example": "2024-03-24T20:05:00Z",
+          },
+          "payer": {
+            "description": "Address of the payer",
+            "example": "0x1234567890123456789012345678901234567890",
+            "type": "string",
+          },
+          "ratePerSecond": {
+            "description": "Payment rate per second",
+            "example": "0.0001",
+            "type": "string",
+          },
+          "recipient": {
+            "description": "Address of the recipient",
+            "example": "0x0987654321098765432109876543210987654321",
+            "type": "string",
+          },
+          "startTime": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string",
+              },
+              {
+                "type": "string",
+              },
+            ],
+            "description": "Start time of the stream",
+            "example": "2024-03-24T20:00:00Z",
+          },
+          "status": {
+            "description": "Status of the payment stream",
+            "enum": [
+              "active",
+              "paused",
+              "cancelled",
+              "completed",
+            ],
+            "example": "active",
+            "type": "string",
+          },
+          "totalAmount": {
+            "description": "Total amount allocated for the stream",
+            "example": "100.0",
+            "type": "string",
+          },
+          "updatedAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string",
+              },
+              {
+                "type": "string",
+              },
+            ],
+            "description": "Last update timestamp",
+            "example": "2024-03-24T20:00:00Z",
+          },
+        },
+        "required": [
+          "id",
+          "payer",
+          "recipient",
+          "status",
+          "ratePerSecond",
+          "startTime",
+          "endTime",
+          "totalAmount",
+          "lastSettledAt",
+          "createdAt",
+          "updatedAt",
+        ],
+        "type": "object",
+      },
+      "StreamList": {
+        "properties": {
+          "limit": {
+            "description": "Number of streams returned in this batch",
+            "example": 20,
+            "type": "number",
+          },
+          "offset": {
+            "description": "Offset for pagination",
+            "example": 0,
+            "type": "number",
+          },
+          "streams": {
+            "items": {
+              "$ref": "#/components/schemas/Stream",
+            },
+            "type": "array",
+          },
+          "total": {
+            "description": "Total number of streams matching the criteria",
+            "example": 100,
+            "type": "number",
+          },
+        },
+        "required": [
+          "streams",
+          "total",
+          "limit",
+          "offset",
+        ],
+        "type": "object",
+      },
+    },
+  },
+  "info": {
+    "description": "API for managing payment streams, metering, and settlement.",
+    "title": "StreamPay API",
+    "version": "1.0.0",
+  },
+  "openapi": "3.0.0",
+  "paths": {
+    "/api/v1/streams": {
+      "get": {
+        "description": "Get a list of payment streams",
+        "parameters": [
+          {
+            "description": "Filter by payer address",
+            "in": "query",
+            "name": "payer",
+            "required": false,
+            "schema": {
+              "description": "Filter by payer address",
+              "type": "string",
+            },
+          },
+          {
+            "description": "Filter by recipient address",
+            "in": "query",
+            "name": "recipient",
+            "required": false,
+            "schema": {
+              "description": "Filter by recipient address",
+              "type": "string",
+            },
+          },
+          {
+            "description": "Status of the payment stream",
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "description": "Status of the payment stream",
+              "enum": [
+                "active",
+                "paused",
+                "cancelled",
+                "completed",
+              ],
+              "example": "active",
+              "type": "string",
+            },
+          },
+          {
+            "description": "Number of records to return",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "description": "Number of records to return",
+              "example": "20",
+              "type": "string",
+            },
+          },
+          {
+            "description": "Number of records to skip",
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "description": "Number of records to skip",
+              "example": "0",
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StreamList",
+                },
+              },
+            },
+            "description": "List of streams",
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Internal server error",
+          },
+        },
+        "summary": "List Streams",
+      },
+    },
+    "/api/v1/streams/{id}": {
+      "get": {
+        "description": "Get details of a specific payment stream",
+        "parameters": [
+          {
+            "description": "The unique identifier of the stream",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "The unique identifier of the stream",
+              "format": "uuid",
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Stream",
+                },
+              },
+            },
+            "description": "Stream details",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Invalid stream ID format",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Stream not found",
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Internal server error",
+          },
+        },
+        "summary": "Get Stream",
+      },
+    },
+    "/health": {
+      "get": {
+        "description": "Get service health status",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health",
+                },
+              },
+            },
+            "description": "Service is healthy",
+          },
+        },
+        "summary": "Health Check",
+      },
+    },
+  },
+  "servers": [
+    {
+      "url": "/",
+    },
+  ],
+}
+`;

@@ -1,0 +1,12 @@
+﻿
+C:\Users\ADMIN\Desktop\remmy-drips\StreamPay-Backend\src\api\v1\streams.test.ts
+  11:102  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  46:101  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\ADMIN\Desktop\remmy-drips\StreamPay-Backend\src\repositories\streamRepository.test.ts
+  18:35  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  19:18  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  25:27  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+Γ£û 5 problems (5 errors, 0 warnings)
+
