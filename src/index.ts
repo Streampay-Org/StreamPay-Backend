@@ -19,9 +19,6 @@ import { metricsHandler, metricsMiddleware } from "./metrics/prometheus";
 const app = express();
 const PORT = env.PORT;
 
-app.get("/metrics", metricsHandler);
-app.use(metricsMiddleware);
-
 app.use(cors());
 app.use(
   "/webhooks/indexer",
@@ -45,6 +42,9 @@ app.get("/api/openapi.json", (_req: Request, res: Response) => {
 app.use("/api/v1/streams", streamRoutes);
 
 if (require.main === module) {
+  const deliveryService = new WebhookDeliveryService(webhookRepository);
+  deliveryService.startWorker();
+
   app.listen(PORT, () => {
     console.log(`StreamPay backend listening on http://localhost:${PORT}`);
   });
