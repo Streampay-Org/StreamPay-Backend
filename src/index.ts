@@ -3,14 +3,18 @@
  */
 
 import cors from "cors";
-import http from "http";
-import express, { ErrorRequestHandler, NextFunction, Request, Response } from "express";
-import v1Router from "./api/v1/router";
+import express, { Request, Response } from "express";
+import streamRoutes from "./api/v1/streams";
+import { generateOpenApi } from "./api/v1/openapi";
 import { metricsHandler, metricsMiddleware } from "./metrics/prometheus";
 
 import indexerWebhookRouter from "./routes/webhooks/indexer";
+import { metricsHandler, metricsMiddleware } from "./metrics/prometheus";
+
+import { metricsHandler, metricsMiddleware } from "./metrics/prometheus";
 
 import { env } from "./config/env";
+import { metricsHandler, metricsMiddleware } from "./metrics/prometheus";
 
 export const JSON_BODY_LIMIT = "100kb";
 export const JSON_BODY_LIMIT_BYTES = 100 * 1024;
@@ -69,61 +73,34 @@ export const httpBodyErrorHandler: ErrorRequestHandler = (error, _req, res, next
 const app = express();
 const PORT = env.PORT;
 
-app.get("/metrics", metricsHandler);
-app.use(metricsMiddleware);
-
 app.use(cors());
-app.use(rejectOversizedJsonPayload);
 app.use(
   "/webhooks/indexer",
-  express.raw({ type: "application/json", limit: JSON_BODY_LIMIT }),
+  express.raw({ type: "application/json" }),
   indexerWebhookRouter,
 );
-app.use(express.json({ limit: JSON_BODY_LIMIT }));
+app.use(express.json());
 
 app.get("/health", (_req: Request, res: Response) => {
-  res.json({ status: "ok", service: "streampay-backend", timestamp: new Date().toISOString() });
+  res.json({
+    status: "ok",
+    service: "streampay-backend",
+    timestamp: new Date().toISOString(),
+  });
 });
 
-app.use("/api/v1", v1Router);
-app.use(httpBodyErrorHandler);
+app.get("/api/openapi.json", (_req: Request, res: Response) => {
+  res.json(generateOpenApi());
+});
 
-export const createHttpServer = () => {
-  const server = http.createServer({ maxHeaderSize: MAX_HEADER_SIZE_BYTES }, app);
-
-  server.on("clientError", (error, socket) => {
-    const clientError = error as Error & { code?: string };
-
-    if (clientError.code !== "HPE_HEADER_OVERFLOW") {
-      socket.destroy();
-      return;
-    }
-
-    if (!socket.writable) {
-      socket.destroy();
-      return;
-    }
-
-    const responseBody = JSON.stringify(headersTooLargeResponse);
-
-    socket.end(
-      [
-        "HTTP/1.1 431 Request Header Fields Too Large",
-        "Connection: close",
-        "Content-Type: application/json; charset=utf-8",
-        `Content-Length: ${Buffer.byteLength(responseBody)}`,
-        "",
-        responseBody,
-      ].join("\r\n"),
-    );
-  });
-
-  return server;
-};
+app.use("/api/v1/streams", streamRoutes);
 
 /* istanbul ignore next */
 if (require.main === module) {
-  createHttpServer().listen(PORT, () => {
+  const deliveryService = new WebhookDeliveryService(webhookRepository);
+  deliveryService.startWorker();
+
+  app.listen(PORT, () => {
     console.log(`StreamPay backend listening on http://localhost:${PORT}`);
   });
 }
