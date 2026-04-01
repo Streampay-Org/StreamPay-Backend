@@ -8,6 +8,7 @@ export const envSchema = z.object({
   DATABASE_URL: z.string().url(),
   JWT_SECRET: z.string().min(32, "JWT_SECRET must be at least 32 characters"),
   RPC_URL: z.string().url(),
+  AUDIT_LOG_RETENTION_DAYS: z.coerce.number().int().positive().default(365),
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
   DB_POOL_MAX: z.coerce.number().min(1).max(100).default(10),
   DB_POOL_IDLE_TIMEOUT: z.coerce.number().min(0).default(30000),

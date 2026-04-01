@@ -8,6 +8,24 @@ import {
 
 const router = Router();
 const streamRepository = new StreamRepository();
+const auditService = new AuditService();
+
+const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const getBearerToken = (authorizationHeader?: string): string | null => {
+  if (!authorizationHeader) return null;
+  const [scheme, token] = authorizationHeader.split(" ");
+  if (scheme !== "Bearer" || !token) return null;
+  return token;
+};
+
+const isProtectedActionAuthorized = (req: Request): boolean => {
+  const expected = process.env.JWT_SECRET;
+  if (!expected) return false;
+
+  const token = getBearerToken(req.header("authorization"));
+  return token === expected;
+};
 
 // GET /api/v1/streams/:id
 router.get(
@@ -37,8 +55,6 @@ router.patch("/:id", async (req: Request, res: Response) => {
     const { id } = req.params;
     const updates = req.body as Partial<UpdateStreamParams> & { updatedAt?: string };
 
-    // Basic UUID validation (regex)
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(id)) {
       return res.status(400).json({ error: "Invalid stream ID format" });
     }

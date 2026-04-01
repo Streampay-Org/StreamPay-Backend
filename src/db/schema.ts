@@ -1,6 +1,7 @@
 import { pgTable, uuid, varchar, timestamp, decimal, pgEnum, json, text } from "drizzle-orm/pg-core";
 
 export const streamStatusEnum = pgEnum("stream_status", ["active", "paused", "cancelled", "completed"]);
+export const auditActionEnum = pgEnum("audit_action", ["stream_create", "stream_update", "stream_admin_action"]);
 
 export const streams = pgTable("streams", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -27,6 +28,16 @@ export const streams = pgTable("streams", {
   chainIdIdx: index("streams_chain_id_idx").on(table.chainId),
   createdAtIdx: index("streams_created_at_idx").on(table.createdAt),
 }));
+
+export const auditLogs = pgTable("audit_logs", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  actor: varchar("actor", { length: 255 }).notNull(),
+  action: auditActionEnum("action").notNull(),
+  streamId: uuid("stream_id"),
+  ipAddress: varchar("ip_address", { length: 64 }).notNull(),
+  metadata: jsonb("metadata").$type<Record<string, unknown> | null>(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
 
 export type Stream = typeof streams.$inferSelect;
 export type NewStream = typeof streams.$inferInsert;
