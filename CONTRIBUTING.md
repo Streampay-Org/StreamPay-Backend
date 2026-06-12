@@ -22,6 +22,21 @@ Thank you for your interest in contributing to the StreamPay Backend! As a Web3-
 
 ## Security
 If you find a security vulnerability, please do not open a public issue.
+Instead, report it privately by emailing the maintainers so we can issue a
+fix before public disclosure.
+
+## Commit Messages
+We follow [Conventional Commits](https://www.conventionalcommits.org/):
+
+- `feat:` a new user-facing feature
+- `fix:` a bug fix
+- `docs:` documentation-only changes
+- `refactor:` code change that neither fixes a bug nor adds a feature
+- `test:` adding or improving tests
+- `chore:` tooling, configuration, or dependency changes
+
+Keep the subject line under 72 characters and prefer the imperative mood
+("add", "fix", "remove" — not "added", "fixes").
 
 ---
 *Built for the Stellar Ecosystem.*
