@@ -1,8 +1,17 @@
 import { z } from "zod";
 import dotenv from "dotenv";
 
+// Load variables from `.env` into `process.env` as early as possible so that
+// callers importing this module get the fully merged environment.
 dotenv.config();
 
+/**
+ * Runtime schema for every environment variable the service consumes.
+ *
+ * Coercion is intentional: process.env values are always strings, but most
+ * fields are semantically numeric. The schema centralizes defaults so the
+ * rest of the codebase can treat `Env` as a plain typed config object.
+ */
 export const envSchema = z.object({
   PORT: z.coerce.number().default(3001),
   DATABASE_URL: z.string().url(),
