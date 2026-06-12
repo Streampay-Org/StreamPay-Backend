@@ -2,15 +2,32 @@ import { eq, and, or, desc, lt, sql } from "drizzle-orm";
 import { db } from "../db/index";
 import { streams, Stream, NewStream } from "../db/schema";
 
+/**
+ * Filters for {@link StreamRepository.findAll}.
+ *
+ * All filter fields are optional and combined with AND semantics; omit a
+ * field to skip filtering on it.
+ */
 export interface FindAllParams {
+  /** Restrict to streams paid out by this address. */
   payer?: string;
+  /** Restrict to streams paid out to this address. */
   recipient?: string;
+  /** Restrict to streams in a specific lifecycle status. */
   status?: "active" | "paused" | "cancelled" | "completed";
+  /** Maximum number of rows to return. */
   limit?: number;
+  /** Number of rows to skip; pairs with `limit` for offset pagination. */
   offset?: number;
+  /** When true, include soft-deleted rows (admin / inspection only). */
   includeDeleted?: boolean;
 }
 
+/**
+ * Patch payload accepted by {@link StreamRepository.update}.
+ *
+ * Only the supplied fields are written; missing fields are left untouched.
+ */
 export interface UpdateStreamParams {
   labels?: string[];
   offChainMemo?: string;
