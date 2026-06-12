@@ -235,4 +235,6 @@ npx drizzle-kit push
 npx drizzle-kit generate
 ```
 
-See [docs/data-model.md](docs/data-model.md) for schema documentation.
+See [docs/data-model.md](docs/data-model.md) for schema documentation and
+[docs/CONFIGURATION.md](docs/CONFIGURATION.md) for the full list of environment
+variables recognized by the service.
