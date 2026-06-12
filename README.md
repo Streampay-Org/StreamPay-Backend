@@ -37,7 +37,7 @@ Node.js + Express (TypeScript) service that will power the StreamPay API gateway
    npm run build && npm start
    ```
 
-API will be at `http://localhost:3001` (or `PORT` env). 
+API will be available at `http://localhost:3001` (or the value of the `PORT` env variable).
 
 - **Health Check**: `GET /health`
 - **Streams API**: `GET /api/v1/streams`
