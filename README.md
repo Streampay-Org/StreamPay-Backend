@@ -1,6 +1,13 @@
 # streampay-backend
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+[![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen.svg)](./package.json)
+[![TypeScript](https://img.shields.io/badge/TypeScript-strict-blue.svg)](./tsconfig.json)
+
 **StreamPay** API backend — stream management, usage metering, and settlement services.
+
+See [docs/CONFIGURATION.md](docs/CONFIGURATION.md), [docs/SECURITY.md](docs/SECURITY.md),
+and [docs/TESTING.md](docs/TESTING.md) for operational details.
 
 ## Overview
 
