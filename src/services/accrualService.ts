@@ -63,4 +63,10 @@ export class AccrualService {
   }
 }
 
+/**
+ * Default shared {@link AccrualService} instance.
+ *
+ * Use this singleton inside request handlers; construct a fresh
+ * `new AccrualService()` only when tests need an isolated instance.
+ */
 export const accrualService = new AccrualService();
