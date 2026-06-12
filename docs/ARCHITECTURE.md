@@ -52,3 +52,20 @@ graph TD
 4. The **Settlement Service** reads the stream data from the **Database**.
 5. The **Settlement Service** uses the **RPC Client** to execute the settlement on the blockchain.
 6. The **RPC Client** interacts with the **Smart Contract** to perform the settlement.
+
+## Code Layout
+
+The Express application is organized by responsibility:
+
+- `src/api/` — versioned HTTP routers (currently `/api/v1`).
+- `src/middleware/` — authentication, validation, and rate-limit middleware.
+- `src/services/` — pure business logic with no Express coupling.
+- `src/repositories/` — Drizzle-backed data access for each table.
+- `src/db/` — schema definitions and the shared connection pool.
+- `src/metrics/` — Prometheus instrumentation.
+- `src/cache/` — Redis client and cache wrappers.
+- `src/clients/` — external service clients (Soroban, indexer, etc.).
+- `src/utils/` — small dependency-free helpers shared across modules.
+
+Tests live next to the code they exercise (`*.test.ts`) so the import graph
+matches the production graph.
