@@ -9,12 +9,27 @@ declare module "express" {
   }
 }
 
+/**
+ * Persisted representation of an API key.
+ *
+ * The plaintext key is never stored — only its SHA-256 hash. Revoked records
+ * are kept so that lookups remain constant-time even after rotation.
+ */
 export interface ApiKeyRecord {
+  /** Stable identifier exposed to operators (e.g. for audit logs). */
   id: string;
-  hash: string; // SHA-256 of API key
+  /** SHA-256 hex digest of the plaintext API key. */
+  hash: string;
+  /** True once the key has been rotated out; the store rejects matches. */
   revoked: boolean;
 }
 
+/**
+ * In-memory store of {@link ApiKeyRecord} entries keyed by SHA-256 hash.
+ *
+ * Designed for constant-time equality checks via `crypto.timingSafeEqual` to
+ * avoid leaking key material through response-time side channels.
+ */
 export class ApiKeyStore {
   private keys = new Map<string, ApiKeyRecord>();
 
