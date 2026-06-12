@@ -79,3 +79,24 @@ npx drizzle-kit generate
 - All addresses are validated before storage
 - Transaction hashes enable on-chain verification
 - HMAC signatures required for webhook ingestion
+
+## Soft Delete
+
+The `streams` table supports a soft-delete pattern via a nullable
+`deleted_at` timestamp. Repository methods filter rows where
+`deleted_at IS NULL` by default; pass `includeDeleted: true` for admin
+inspection paths. Hard deletes are reserved for retention sweeps and are
+not exposed via the HTTP API.
+
+## Audit Log
+
+Sensitive write operations (stream create, update, and admin actions) are
+recorded by `AuditService` with:
+
+- `actor`: identifier of the principal making the request
+- `action`: discriminator for the operation
+- `streamId`: target stream id when applicable
+- `ipAddress`: normalized client IP (IPv4-mapped IPv6 prefix stripped)
+- `metadata`: arbitrary JSON describing the change
+
+Retention is governed by `AUDIT_LOG_RETENTION_DAYS` (default 365).
