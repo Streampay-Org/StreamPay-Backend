@@ -2,6 +2,26 @@
   "name": "streampay-backend",
   "version": "0.1.0",
   "description": "StreamPay API — stream management, metering, and settlement",
+  "keywords": [
+    "streampay",
+    "stellar",
+    "payments",
+    "streaming",
+    "metering",
+    "settlement",
+    "drizzle",
+    "express",
+    "typescript"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Streampay-Org/StreamPay-Backend.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Streampay-Org/StreamPay-Backend/issues"
+  },
+  "homepage": "https://github.com/Streampay-Org/StreamPay-Backend#readme",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
