@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from "express";
-import jwt, { JwtPayload, VerifyOptions } from "jsonwebtoken";
+import jwt, { JwtPayload, VerifyErrors, VerifyOptions } from "jsonwebtoken";
 import { env } from "../config/env";
 
 /**
@@ -53,7 +53,7 @@ export function authenticateJWT(
     ...(env.JWT_AUDIENCE && { audience: env.JWT_AUDIENCE }),
   };
 
-  jwt.verify(token, secret, options, (err, decoded) => {
+  jwt.verify(token, secret, options, (err: VerifyErrors | null, decoded: JwtPayload | string | undefined) => {
     if (err) {
       const message =
         err.name === "TokenExpiredError"
