@@ -1,6 +1,6 @@
-import { eq, and, or, desc, lt, sql } from "drizzle-orm";
+import { and, desc, eq, sql, type SQL } from "drizzle-orm";
 import { db } from "../db/index";
-import { streams, Stream, NewStream } from "../db/schema";
+import { Stream, streams } from "../db/schema";
 
 /**
  * Filters for {@link StreamRepository.findAll}.
@@ -24,13 +24,13 @@ export interface FindAllParams {
 }
 
 /**
- * Patch payload accepted by {@link StreamRepository.update}.
+ * Patch payload accepted by {@link StreamRepository.updateById}.
  *
  * Only the supplied fields are written; missing fields are left untouched.
  */
 export interface UpdateStreamParams {
   labels?: string[];
-  offChainMemo?: string;
+  offChainMemo?: string | null;
   status?: "active" | "paused" | "cancelled" | "completed";
   updatedAt?: Date;
 }
@@ -54,7 +54,7 @@ export interface ExportBatch {
 
 export class StreamRepository {
   async findById(id: string, includeDeleted = false): Promise<(Stream & { accruedEstimate: string }) | null> {
-    const conditions = [eq(streams.id, id)];
+    const conditions: SQL[] = [eq(streams.id, id)];
     if (!includeDeleted) conditions.push(sql`${streams.deletedAt} IS NULL`);
 
     const [result] = await db
@@ -73,11 +73,11 @@ export class StreamRepository {
     };
   }
 
-  async findAll(params: FindAllParams) {
+  async findAll(params: FindAllParams = {}) {
     const limit = Math.min(params.limit ?? 20, 100);
     const offset = params.offset ?? 0;
 
-    const conditions = [];
+    const conditions: SQL[] = [];
     if (params.payer) conditions.push(eq(streams.payer, params.payer));
     if (params.recipient) conditions.push(eq(streams.recipient, params.recipient));
     if (params.status) conditions.push(eq(streams.status, params.status));
@@ -86,25 +86,24 @@ export class StreamRepository {
       conditions.push(sql`${streams.deletedAt} IS NULL`);
     }
 
-    const query = db
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const data = await db
       .select()
       .from(streams)
-      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .where(whereClause)
       .orderBy(desc(streams.createdAt))
       .limit(limit)
       .offset(offset);
 
-    const data = await query;
-
-    // For total count
     const [countResult] = await db
       .select({ count: sql<number>`count(*)` })
       .from(streams)
-      .where(conditions.length > 0 ? and(...conditions) : undefined);
+      .where(whereClause);
 
     return {
       streams: data,
-      total: Number(countResult.count),
+      total: Number(countResult?.count ?? 0),
       limit,
       offset,
     };
@@ -116,7 +115,7 @@ export class StreamRepository {
       updatedAt: new Date(),
     };
 
-    const conditions = [eq(streams.id, id)];
+    const conditions: SQL[] = [eq(streams.id, id)];
     if (currentUpdatedAt) {
       conditions.push(eq(streams.updatedAt, currentUpdatedAt));
     }
@@ -127,7 +126,7 @@ export class StreamRepository {
       .where(and(...conditions))
       .returning();
 
-    return result[0] || null;
+    return result[0] ?? null;
   }
 
   private calculateAccruedEstimate(stream: Stream): number {

@@ -2,7 +2,11 @@
 module.exports = {
   preset: "ts-jest",
   testEnvironment: "node",
-  testMatch: ["**/__tests__/**/*.test.ts"],
+  testMatch: [
+    "<rootDir>/src/**/__tests__/**/*.test.ts",
+    "<rootDir>/src/apiKeyAuth.test.ts",
+    "<rootDir>/src/indexerWebhook.test.ts",
+  ],
   collectCoverageFrom: [
     "src/cache/**/*.ts",
     "src/services/**/*.ts",

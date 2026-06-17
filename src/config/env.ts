@@ -5,12 +5,31 @@ import dotenv from "dotenv";
 // callers importing this module get the fully merged environment.
 dotenv.config();
 
+const booleanFromEnv = z.preprocess((value: unknown) => {
+  if (typeof value !== "string") {
+    return value;
+  }
+
+  const normalized = value.trim().toLowerCase();
+
+  if (["1", "true", "yes", "on"].includes(normalized)) {
+    return true;
+  }
+
+  if (["0", "false", "no", "off", ""].includes(normalized)) {
+    return false;
+  }
+
+  return value;
+}, z.boolean());
+
 /**
  * Runtime schema for every environment variable the service consumes.
  *
- * Coercion is intentional: process.env values are always strings, but most
- * fields are semantically numeric. The schema centralizes defaults so the
- * rest of the codebase can treat `Env` as a plain typed config object.
+ * Coercion is intentional for numeric fields: process.env values are always
+ * strings, but most fields are semantically numeric. The schema centralizes
+ * defaults so the rest of the codebase can treat `Env` as a plain typed config
+ * object.
  */
 export const envSchema = z.object({
   PORT: z.coerce.number().default(3001),
@@ -29,6 +48,8 @@ export const envSchema = z.object({
   DB_POOL_IDLE_TIMEOUT: z.coerce.number().min(0).default(30000),
   DB_CONNECTION_TIMEOUT: z.coerce.number().min(0).default(5000),
   DB_STATEMENT_TIMEOUT: z.coerce.number().min(0).default(30000),
+  HEALTH_CHECK_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
+  RPC_PROBE_ENABLED: booleanFromEnv.default(false),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -59,5 +80,7 @@ export const env = process.env.NODE_ENV === "test"
       DB_POOL_IDLE_TIMEOUT: 10000,
       DB_CONNECTION_TIMEOUT: 2000,
       DB_STATEMENT_TIMEOUT: 10000,
+      HEALTH_CHECK_TIMEOUT_MS: 5000,
+      RPC_PROBE_ENABLED: false,
     })
   : validateEnv(process.env);

@@ -14,13 +14,32 @@ StreamPay Backend handles partner integrations and chain-indexer webhooks.
 Key security controls include:
 
 - **API key authentication** with SHA-256 hashes at rest and constant-time
-  comparison (`crypto.timingSafeEqual`).
+  digest comparison (`crypto.timingSafeEqual`). The middleware is enforced
+  before JSON/raw-body parsing for protected routes.
 - **HMAC verification** of indexer webhook payloads against the raw request
   body, using `INDEXER_WEBHOOK_SECRET`.
 - **Replay protection** via deduplication of `eventId` values in the
   ingestion service.
 - **IP-based and API-key-based rate limiting** through `express-rate-limit`.
 - **Strict CORS** allowlists in production (no wildcard).
+
+## API Key Enforcement Scope
+
+All routes under `/api/v1/*` require either `x-api-key` or
+`Authorization: ApiKey <key>`. Current protected routes are
+`GET /api/v1/streams`, `GET /api/v1/streams/:id`,
+`GET /api/v1/streams/:id/accrual-preview`, and
+`PATCH /api/v1/streams/:id`. This middleware runs before route handlers and
+before JSON body parsing, so unauthenticated requests do not reach validation,
+repository, or mutating handlers.
+
+`POST /webhooks/indexer` requires both API key authentication and the existing
+`x-indexer-signature` HMAC signature. API key authentication runs first, then
+the raw JSON body is parsed and passed to HMAC verification. The API key layer is
+an additional control and does not replace HMAC verification.
+
+Public operational routes remain unauthenticated: `GET /health` and
+`GET /api/openapi.json`.
 
 ## Dependency Hygiene
 

@@ -2,8 +2,8 @@ import crypto from "crypto";
 import request from "supertest";
 import app from "./index";
 
+import { apiKeyStore, refreshApiKeyStore } from "./middleware/apiKeyAuth";
 import { eventIngestionService } from "./services/eventIngestionService";
-import { refreshApiKeyStore } from "./middleware/apiKeyAuth";
 
 const secret = "test-indexer-secret";
 
@@ -32,10 +32,12 @@ describe("POST /webhooks/indexer", () => {
     eventIngestionService.reset();
   });
 
-  afterAll(() => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+    eventIngestionService.reset();
+    apiKeyStore.clear();
     delete process.env.INDEXER_WEBHOOK_SECRET;
     delete process.env.API_KEYS;
-    eventIngestionService.reset();
   });
 
   it("accepts a valid signed event", async () => {
@@ -57,7 +59,78 @@ describe("POST /webhooks/indexer", () => {
     });
   });
 
-  it("rejects an invalid signature", async () => {
+  it("accepts a valid API key from Authorization ApiKey header", async () => {
+    const body = JSON.stringify({ ...payload, eventId: "evt_authorization_header" });
+
+    const res = await request(app)
+      .post("/webhooks/indexer")
+      .set("Content-Type", "application/json")
+      .set("Authorization", "ApiKey test-1234")
+      .set("x-indexer-signature", sign(body))
+      .send(body);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      accepted: true,
+      duplicate: false,
+      eventId: "evt_authorization_header",
+    });
+  });
+
+  it("rejects a missing API key before raw-body parsing and HMAC verification", async () => {
+    const body = JSON.stringify(payload);
+    const ingestSpy = jest.spyOn(eventIngestionService, "ingest");
+
+    const res = await request(app)
+      .post("/webhooks/indexer")
+      .set("Content-Type", "application/json")
+      .set("x-indexer-signature", sign(body))
+      .send(body);
+
+    expect(res.status).toBe(401);
+    expect(res.body).toEqual({ error: "API key missing" });
+    expect(ingestSpy).not.toHaveBeenCalled();
+  });
+
+  it("rejects an invalid API key before HMAC verification", async () => {
+    const body = JSON.stringify(payload);
+    const ingestSpy = jest.spyOn(eventIngestionService, "ingest");
+
+    const res = await request(app)
+      .post("/webhooks/indexer")
+      .set("Content-Type", "application/json")
+      .set("x-api-key", "wrong-key")
+      .set("x-indexer-signature", sign(body))
+      .send(body);
+
+    expect(res.status).toBe(401);
+    expect(res.body).toEqual({ error: "API key invalid or revoked" });
+    expect(ingestSpy).not.toHaveBeenCalled();
+  });
+
+  it("rejects a revoked API key before HMAC verification", async () => {
+    const record = apiKeyStore.findKeyByValue("test-1234");
+    expect(record).not.toBeNull();
+    if (record) {
+      apiKeyStore.revokeKey(record.id);
+    }
+
+    const body = JSON.stringify(payload);
+    const ingestSpy = jest.spyOn(eventIngestionService, "ingest");
+
+    const res = await request(app)
+      .post("/webhooks/indexer")
+      .set("Content-Type", "application/json")
+      .set("x-api-key", "test-1234")
+      .set("x-indexer-signature", sign(body))
+      .send(body);
+
+    expect(res.status).toBe(401);
+    expect(res.body).toEqual({ error: "API key invalid or revoked" });
+    expect(ingestSpy).not.toHaveBeenCalled();
+  });
+
+  it("rejects an invalid signature after accepting API key auth", async () => {
     const body = JSON.stringify(payload);
 
     const res = await request(app)
@@ -167,5 +240,11 @@ describe("POST /webhooks/indexer", () => {
     expect(res.body).toMatchObject({
       error: "invalid_body",
     });
+  });
+
+  it("does not apply POST webhook API key auth to unsupported webhook methods", async () => {
+    const res = await request(app).get("/webhooks/indexer");
+
+    expect(res.status).toBe(404);
   });
 });

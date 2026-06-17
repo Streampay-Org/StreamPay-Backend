@@ -3,31 +3,21 @@
  */
 
 import cors from "cors";
-import express, { Request, Response } from "express";
+import express, { ErrorRequestHandler, NextFunction, Request, Response } from "express";
 import streamRoutes from "./api/v1/streams";
 import { generateOpenApi } from "./api/v1/openapi";
-import { metricsHandler, metricsMiddleware } from "./metrics/prometheus";
-
-import indexerWebhookRouter from "./routes/webhooks/indexer";
-import { metricsHandler, metricsMiddleware } from "./metrics/prometheus";
-
-import { metricsHandler, metricsMiddleware } from "./metrics/prometheus";
-
 import { env } from "./config/env";
-import { metricsHandler, metricsMiddleware } from "./metrics/prometheus";
+import { apiKeyAuthMiddleware } from "./middleware/apiKeyAuth";
+import { webhookRepository } from "./repositories/webhookRepository";
+import indexerWebhookRouter from "./routes/webhooks/indexer";
+import { WebhookDeliveryService } from "./services/webhookDeliveryService";
 
 export const JSON_BODY_LIMIT = "100kb";
 export const JSON_BODY_LIMIT_BYTES = 100 * 1024;
-export const MAX_HEADER_SIZE_BYTES = 16 * 1024;
 
 const payloadTooLargeResponse = {
   error: "payload_too_large",
   message: `JSON request body exceeds ${JSON_BODY_LIMIT} limit.`,
-};
-
-const headersTooLargeResponse = {
-  error: "headers_too_large",
-  message: `Request headers exceed ${MAX_HEADER_SIZE_BYTES} byte limit.`,
 };
 
 export const rejectOversizedJsonPayload = (req: Request, res: Response, next: NextFunction) => {
@@ -74,12 +64,8 @@ const app = express();
 const PORT = env.PORT;
 
 app.use(cors());
-app.use(
-  "/webhooks/indexer",
-  express.raw({ type: "application/json" }),
-  indexerWebhookRouter,
-);
-app.use(express.json());
+
+app.use("/webhooks/indexer", indexerWebhookRouter);
 
 app.get("/health", (_req: Request, res: Response) => {
   res.json({
@@ -93,7 +79,16 @@ app.get("/api/openapi.json", (_req: Request, res: Response) => {
   res.json(generateOpenApi());
 });
 
+app.use(
+  "/api/v1",
+  apiKeyAuthMiddleware,
+  rejectOversizedJsonPayload,
+  express.json({ limit: JSON_BODY_LIMIT }),
+);
+
 app.use("/api/v1/streams", streamRoutes);
+
+app.use(httpBodyErrorHandler);
 
 /* istanbul ignore next */
 if (require.main === module) {

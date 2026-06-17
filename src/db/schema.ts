@@ -1,4 +1,17 @@
-import { pgTable, uuid, varchar, timestamp, decimal, pgEnum, json, text } from "drizzle-orm/pg-core";
+import {
+  boolean,
+  decimal,
+  index,
+  integer,
+  json,
+  jsonb,
+  pgEnum,
+  pgTable,
+  text,
+  timestamp,
+  uuid,
+  varchar,
+} from "drizzle-orm/pg-core";
 
 export const streamStatusEnum = pgEnum("stream_status", ["active", "paused", "cancelled", "completed"]);
 export const auditActionEnum = pgEnum("audit_action", ["stream_create", "stream_update", "stream_admin_action"]);
@@ -17,6 +30,7 @@ export const streams = pgTable("streams", {
   offChainMemo: text("off_chain_memo"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  deletedAt: timestamp("deleted_at"),
   chainId: varchar("chain_id", { length: 50 }).notNull().default("stellar-testnet"),
   contractAddress: varchar("contract_address", { length: 255 }),
   transactionHash: varchar("transaction_hash", { length: 66 }),
@@ -27,6 +41,7 @@ export const streams = pgTable("streams", {
   statusIdx: index("streams_status_idx").on(table.status),
   chainIdIdx: index("streams_chain_id_idx").on(table.chainId),
   createdAtIdx: index("streams_created_at_idx").on(table.createdAt),
+  deletedAtIdx: index("streams_deleted_at_idx").on(table.deletedAt),
 }));
 
 export const auditLogs = pgTable("audit_logs", {
@@ -41,6 +56,8 @@ export const auditLogs = pgTable("audit_logs", {
 
 export type Stream = typeof streams.$inferSelect;
 export type NewStream = typeof streams.$inferInsert;
+export type AuditLog = typeof auditLogs.$inferSelect;
+export type NewAuditLog = typeof auditLogs.$inferInsert;
 
 // ---------------------------------------------------------------------------
 // Outbound webhook subscriptions
@@ -64,7 +81,7 @@ export const webhookSubscriptions = pgTable("webhook_subscriptions", {
   id: uuid("id").primaryKey().defaultRandom(),
   /** Caller-supplied URL to POST events to. */
   url: varchar("url", { length: 2048 }).notNull(),
-  /** HMAC-SHA256 signing secret — stored hashed, never returned in API responses. */
+  /** Sensitive HMAC-SHA256 signing secret used for outbound delivery signing. */
   secret: varchar("secret", { length: 255 }).notNull(),
   /** Comma-separated list of event types to deliver; empty = all events. */
   eventTypes: text("event_types").notNull().default(""),
