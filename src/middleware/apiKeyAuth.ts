@@ -1,5 +1,8 @@
 import crypto from "crypto";
-import { Request, Response, NextFunction } from "express";
+import { NextFunction, Request, Response } from "express";
+
+const SHA256_HEX_REGEX = /^[0-9a-f]{64}$/i;
+const AUTHORIZATION_API_KEY_REGEX = /^ApiKey\s+(.+)$/i;
 
 declare module "express" {
   interface Request {
@@ -13,7 +16,8 @@ declare module "express" {
  * Persisted representation of an API key.
  *
  * The plaintext key is never stored — only its SHA-256 hash. Revoked records
- * are kept so that lookups remain constant-time even after rotation.
+ * stay in the store so validation performs digest comparison work for active
+ * and rotated-out keys while still rejecting revoked matches.
  */
 export interface ApiKeyRecord {
   /** Stable identifier exposed to operators (e.g. for audit logs). */
@@ -24,14 +28,26 @@ export interface ApiKeyRecord {
   revoked: boolean;
 }
 
+type StoredApiKeyRecord = {
+  record: ApiKeyRecord;
+  hashBuffer: Buffer;
+};
+
+const copyApiKeyRecord = (record: ApiKeyRecord): ApiKeyRecord => ({ ...record });
+const normalizeHash = (hash: string): string => hash.toLowerCase();
+
 /**
- * In-memory store of {@link ApiKeyRecord} entries keyed by SHA-256 hash.
+ * In-memory store of {@link ApiKeyRecord} entries keyed by stable key id.
  *
- * Designed for constant-time equality checks via `crypto.timingSafeEqual` to
- * avoid leaking key material through response-time side channels.
+ * Requests are checked by hashing the candidate key and comparing that digest
+ * against every configured record with `crypto.timingSafeEqual`. Stored digests
+ * are validated and pre-decoded to `Buffer`s when records are added, avoiding
+ * repeated hex parsing on every request. The scan intentionally does not
+ * short-circuit on a match, which avoids leaking which key id matched and keeps
+ * revoked records on the same comparison path as active records.
  */
 export class ApiKeyStore {
-  private keys = new Map<string, ApiKeyRecord>();
+  private readonly keys = new Map<string, StoredApiKeyRecord>();
 
   constructor(initialKeys: ApiKeyRecord[] = []) {
     for (const key of initialKeys) {
@@ -40,24 +56,39 @@ export class ApiKeyStore {
   }
 
   addKeyRecord(record: ApiKeyRecord): void {
-    if (!record || !record.id || !record.hash) {
+    if (!record || !record.id || !record.hash || typeof record.revoked !== "boolean") {
       throw new Error("ApiKeyStore: invalid key record");
     }
-    this.keys.set(record.id, record);
+
+    if (!SHA256_HEX_REGEX.test(record.hash)) {
+      throw new Error("ApiKeyStore: key hash must be a SHA-256 hex digest");
+    }
+
+    const normalizedRecord = copyApiKeyRecord({
+      ...record,
+      hash: normalizeHash(record.hash),
+    });
+
+    this.keys.set(normalizedRecord.id, {
+      record: normalizedRecord,
+      hashBuffer: Buffer.from(normalizedRecord.hash, "hex"),
+    });
   }
 
   addPlaintextKey(id: string, apiKey: string, revoked = false): ApiKeyRecord {
-    const hash = hashApiKey(apiKey);
-    const record: ApiKeyRecord = { id, hash, revoked };
+    const record: ApiKeyRecord = { id, hash: hashApiKey(apiKey), revoked };
     this.addKeyRecord(record);
-    return record;
+    return copyApiKeyRecord(record);
   }
 
   revokeKey(id: string): void {
-    const record = this.keys.get(id);
-    if (!record) return;
-    record.revoked = true;
-    this.keys.set(id, record);
+    const entry = this.keys.get(id);
+    if (!entry) return;
+
+    this.keys.set(id, {
+      ...entry,
+      record: { ...entry.record, revoked: true },
+    });
   }
 
   clear(): void {
@@ -65,46 +96,41 @@ export class ApiKeyStore {
   }
 
   getKeys(): ApiKeyRecord[] {
-    return Array.from(this.keys.values());
+    return Array.from(this.keys.values(), ({ record }) => copyApiKeyRecord(record));
   }
 
   findKeyByValue(apiKey: string): ApiKeyRecord | null {
-    const candidateHash = hashApiKey(apiKey);
-    const candidateBuffer = Buffer.from(candidateHash, "hex");
+    const candidateBuffer = Buffer.from(hashApiKey(apiKey), "hex");
+    let matchedRecord: ApiKeyRecord | null = null;
 
-    for (const record of this.keys.values()) {
-      if (record.revoked) continue;
+    for (const { record, hashBuffer } of this.keys.values()) {
+      const isMatch = crypto.timingSafeEqual(candidateBuffer, hashBuffer);
 
-      const storedBuffer = Buffer.from(record.hash, "hex");
-
-      if (storedBuffer.length !== candidateBuffer.length) {
-        continue;
-      }
-
-      if (crypto.timingSafeEqual(candidateBuffer, storedBuffer)) {
-        return record;
+      if (isMatch && !record.revoked) {
+        matchedRecord = record;
       }
     }
 
-    return null;
+    return matchedRecord ? copyApiKeyRecord(matchedRecord) : null;
   }
 
   static fromEnv(): ApiKeyStore {
     const store = new ApiKeyStore();
 
-    const plaintextValues = process.env.API_KEYS?.split(",").map((v) => v.trim()).filter(Boolean) ?? [];
+    const plaintextValues = process.env.API_KEYS?.split(",").map((value) => value.trim()).filter(Boolean) ?? [];
 
     for (const [index, apiKey] of plaintextValues.entries()) {
       store.addPlaintextKey(`env-${index}`, apiKey);
     }
 
-    const hashedValues = process.env.API_KEY_HASHES?.split(",").map((v) => v.trim()).filter(Boolean) ?? [];
+    const hashedValues = process.env.API_KEY_HASHES?.split(",").map((value) => value.trim()).filter(Boolean) ?? [];
 
     for (const [index, hash] of hashedValues.entries()) {
-      if (!/^[0-9a-f]{64}$/i.test(hash)) {
-        throw new Error("API_KEY_HASHES must be a comma-separated list of SHA256 hex hashes");
+      if (!SHA256_HEX_REGEX.test(hash)) {
+        throw new Error("API_KEY_HASHES must be a comma-separated list of SHA-256 hex hashes");
       }
-      store.addKeyRecord({ id: `env-hash-${index}`, hash: hash.toLowerCase(), revoked: false });
+
+      store.addKeyRecord({ id: `env-hash-${index}`, hash, revoked: false });
     }
 
     return store;
@@ -115,8 +141,8 @@ export const hashApiKey = (apiKey: string): string => {
   if (!apiKey) {
     throw new Error("API key is required for hashing");
   }
-  const hash = crypto.createHash("sha256").update(apiKey, "utf-8").digest("hex");
-  return hash;
+
+  return crypto.createHash("sha256").update(apiKey, "utf-8").digest("hex");
 };
 
 // Shared store; tests can reset.
@@ -130,26 +156,23 @@ export const refreshApiKeyStore = (): void => {
   }
 };
 
-const parseAuthorization = (headerValue: string): string | null => {
-  const trimmed = headerValue.trim();
-  if (!trimmed) return null;
+const parseAuthorizationApiKey = (headerValue: string): string | null => {
+  const match = headerValue.trim().match(AUTHORIZATION_API_KEY_REGEX);
+  return match ? match[1].trim() : null;
+};
 
-  const bearerMatch = trimmed.match(/^ApiKey\s+(.+)$/i);
-  if (bearerMatch) {
-    return bearerMatch[1].trim();
-  }
+const getApiKeyFromRequest = (req: Request): string | undefined => {
+  const headerApiKey = req.header("x-api-key")?.trim();
+  if (headerApiKey) return headerApiKey;
 
-  return null;
+  const authorizationHeader = req.header("authorization");
+  if (!authorizationHeader) return undefined;
+
+  return parseAuthorizationApiKey(authorizationHeader) ?? undefined;
 };
 
 export const apiKeyAuthMiddleware = (req: Request, res: Response, next: NextFunction) => {
-  const rawHeader = req.header("x-api-key") || req.header("authorization");
-
-  const apiKey = rawHeader
-    ? rawHeader.startsWith("ApiKey")
-      ? parseAuthorization(rawHeader)!
-      : rawHeader
-    : undefined;
+  const apiKey = getApiKeyFromRequest(req);
 
   if (!apiKey) {
     res.status(401).json({ error: "API key missing" });
@@ -163,7 +186,7 @@ export const apiKeyAuthMiddleware = (req: Request, res: Response, next: NextFunc
     return;
   }
 
-  // Inject metadata for downstream handlers if needed
+  // Inject metadata for downstream handlers if needed.
   req.apiKey = { id: record.id };
   next();
 };

@@ -26,6 +26,13 @@ startup. Defaults shown are applied when the variable is unset.
 | `DB_CONNECTION_TIMEOUT` | `5000` / `10000` | Connection acquisition timeout in ms. |
 | `DB_STATEMENT_TIMEOUT` | `30000` / `60000` | Per-statement timeout in ms. |
 
+## Health checks
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `HEALTH_CHECK_TIMEOUT_MS` | `5000` | Timeout for deep health probes. |
+| `RPC_PROBE_ENABLED` | `false` | When true, deep health checks also probe the configured RPC endpoint. Accepts `true`/`false`, `1`/`0`, `yes`/`no`, or `on`/`off`. |
+
 ## Rate limiting
 
 | Variable | Default | Description |

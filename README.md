@@ -70,15 +70,26 @@ The backend supports API key authentication for internal jobs and partner integr
 
 - Header: `x-api-key` or `Authorization: ApiKey <key>`
 - Keys are hashed with SHA-256 at rest
-- Constant-time comparison via `crypto.timingSafeEqual`
+- Constant-time digest comparison via `crypto.timingSafeEqual`
 - Revoked keys are rejected and treated as invalid
 
 Set environment variable(s) before starting:
 
 - `API_KEYS`: comma-separated plaintext keys (development/test only)
-- `API_KEY_HASHES`: comma-separated SHA256 hashes (production / at-rest hashes)
+- `API_KEY_HASHES`: comma-separated SHA-256 hashes (production / at-rest hashes)
 
-Add `x-api-key` to `/api/v1/*` and `/webhooks/indexer` requests.
+Required route scope:
+
+| Route | Methods | Required headers |
+|-------|---------|------------------|
+| `/api/v1/streams` | `GET` | `x-api-key` or `Authorization: ApiKey <key>` |
+| `/api/v1/streams/:id` | `GET`, `PATCH` | `x-api-key` or `Authorization: ApiKey <key>` |
+| `/api/v1/streams/:id/accrual-preview` | `GET` | `x-api-key` or `Authorization: ApiKey <key>` |
+| `/webhooks/indexer` | `POST` only | `x-api-key` or `Authorization: ApiKey <key>`, plus `x-indexer-signature` |
+
+API key authentication runs before JSON body parsing on `/api/v1/*` and before raw-body parsing on `POST /webhooks/indexer`, so unauthenticated requests do not reach validation, repository calls, or HMAC verification. Missing keys return `401` with `{ "error": "API key missing" }`; invalid or revoked keys return `401` with `{ "error": "API key invalid or revoked" }`.
+
+Public routes that do not require API key authentication are `GET /health` and `GET /api/openapi.json`.
 
 ## Indexer webhook ingestion
 
@@ -105,6 +116,7 @@ Example payload:
 Security notes:
 
 - Signature verification uses the raw request body and `crypto.timingSafeEqual`.
+- API key authentication is enforced before raw-body parsing and HMAC verification.
 - Replay protection is enforced by deduplicating `eventId` values in the ingestion service.
 - Duplicate deliveries are treated as safe no-ops and return `202 Accepted`.
 
