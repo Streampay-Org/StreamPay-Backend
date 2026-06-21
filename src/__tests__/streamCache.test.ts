@@ -19,8 +19,9 @@ const mockRedisClient = {
     if (connectShouldThrow) throw new Error("ECONNREFUSED");
   }),
   get: jest.fn(async (key: string) => store[key] ?? null),
-  set: jest.fn(async (key: string, value: string) => {
+  set: jest.fn(async (key: string, value: string, options?: { EX?: number }) => {
     store[key] = value;
+    void options; // satisfy linter
     return "OK";
   }),
   del: jest.fn(async (key: string) => {
