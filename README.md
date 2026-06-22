@@ -7,7 +7,8 @@
 **StreamPay** API backend — stream management, usage metering, and settlement services.
 
 See [docs/CONFIGURATION.md](docs/CONFIGURATION.md), [docs/SECURITY.md](docs/SECURITY.md),
-and [docs/TESTING.md](docs/TESTING.md) for operational details.
+[docs/TESTING.md](docs/TESTING.md), and
+[docs/settlement-webhooks.md](docs/settlement-webhooks.md) for operational details.
 
 ## Overview
 
