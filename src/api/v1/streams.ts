@@ -20,6 +20,7 @@ const router = Router();
 const streamRepository = new StreamRepository();
 const allowedUpdateFields = new Set(["labels", "offChainMemo", "status", "updatedAt"]);
 const validStreamStatuses = ["active", "paused", "cancelled", "completed"] as const;
+const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type UpdateStreamRequestBody = Omit<Partial<UpdateStreamParams>, "updatedAt"> & {
   updatedAt?: string;
