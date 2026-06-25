@@ -9,6 +9,7 @@
 import { Router, Request, Response } from "express";
 import crypto from "crypto";
 import { z } from "zod";
+import { uuidSchema } from "../../validation/schemas";
 import { webhookRepository } from "../../repositories/webhookRepository";
 
 const router = Router();
@@ -66,8 +67,7 @@ router.get("/", async (_req: Request, res: Response) => {
 // DELETE /api/v1/webhooks/:id
 router.delete("/:id", async (req: Request, res: Response) => {
   const { id } = req.params;
-  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  if (!uuidRegex.test(id)) {
+  if (!uuidSchema.safeParse(id).success) {
     return res.status(400).json({ error: "Invalid subscription ID format" });
   }
 
