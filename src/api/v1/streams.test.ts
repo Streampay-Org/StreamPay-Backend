@@ -2,6 +2,7 @@ import request from "supertest";
 import app from "../../index";
 import { StreamRepository } from "../../repositories/streamRepository";
 import { Stream } from "../../db/schema";
+import { refreshApiKeyStore } from "../../middleware/apiKeyAuth";
 
 const TEST_SECRET = "test-jwt-secret-that-is-at-least-32-chars!!";
 
@@ -114,6 +115,7 @@ describe("Stream API Routes", () => {
 
       const response = await request(app)
         .post("/api/v1/streams")
+        .set("x-api-key", "test-1234")
         .send(validBody);
 
       expect(response.status).toBe(201);
@@ -125,6 +127,7 @@ describe("Stream API Routes", () => {
     it("should return 400 when required fields are missing", async () => {
       const response = await request(app)
         .post("/api/v1/streams")
+        .set("x-api-key", "test-1234")
         .send({ payer: "GPAYER" });
 
       expect(response.status).toBe(400);
@@ -135,6 +138,7 @@ describe("Stream API Routes", () => {
     it("should return 400 when ratePerSecond is not a decimal string", async () => {
       const response = await request(app)
         .post("/api/v1/streams")
+        .set("x-api-key", "test-1234")
         .send({ ...validBody, ratePerSecond: "not-a-number" });
 
       expect(response.status).toBe(400);
@@ -144,6 +148,7 @@ describe("Stream API Routes", () => {
     it("should return 400 when startTime is not ISO-8601", async () => {
       const response = await request(app)
         .post("/api/v1/streams")
+        .set("x-api-key", "test-1234")
         .send({ ...validBody, startTime: "not-a-date" });
 
       expect(response.status).toBe(400);
@@ -157,6 +162,7 @@ describe("Stream API Routes", () => {
 
       const response = await request(app)
         .post("/api/v1/streams")
+        .set("x-api-key", "test-1234")
         .send(validBody);
 
       expect(response.status).toBe(500);
@@ -195,6 +201,7 @@ describe("Stream API Routes", () => {
 
       const response = await request(app)
         .patch(`/api/v1/streams/${validId}`)
+        .set("x-api-key", "test-1234")
         .send(updateData);
 
       expect(response.status).toBe(200);
@@ -209,6 +216,7 @@ describe("Stream API Routes", () => {
 
       const response = await request(app)
         .patch(`/api/v1/streams/${validId}`)
+        .set("x-api-key", "test-1234")
         .send({ labels: ["test"] });
 
       expect(response.status).toBe(404);
@@ -219,6 +227,7 @@ describe("Stream API Routes", () => {
     it("should return 400 when ID is invalid", async () => {
       const response = await request(app)
         .patch("/api/v1/streams/invalid-id")
+        .set("x-api-key", "test-1234")
         .send({ labels: ["test"] });
 
       expect(response.status).toBe(400);
@@ -228,6 +237,7 @@ describe("Stream API Routes", () => {
     it("should return 400 when invalid fields are provided", async () => {
       const response = await request(app)
         .patch(`/api/v1/streams/${validId}`)
+        .set("x-api-key", "test-1234")
         .send({ invalidField: "value" });
 
       expect(response.status).toBe(400);
@@ -237,6 +247,7 @@ describe("Stream API Routes", () => {
     it("should return 400 when status is invalid", async () => {
       const response = await request(app)
         .patch(`/api/v1/streams/${validId}`)
+        .set("x-api-key", "test-1234")
         .send({ status: "invalid" });
 
       expect(response.status).toBe(400);
@@ -246,6 +257,7 @@ describe("Stream API Routes", () => {
     it("should return 400 when labels is not an array of strings", async () => {
       const response = await request(app)
         .patch(`/api/v1/streams/${validId}`)
+        .set("x-api-key", "test-1234")
         .send({ labels: "not an array" });
 
       expect(response.status).toBe(400);
@@ -255,6 +267,7 @@ describe("Stream API Routes", () => {
     it("should return 400 when offChainMemo is not a string or null", async () => {
       const response = await request(app)
         .patch(`/api/v1/streams/${validId}`)
+        .set("x-api-key", "test-1234")
         .send({ offChainMemo: 123 });
 
       expect(response.status).toBe(400);
@@ -267,6 +280,7 @@ describe("Stream API Routes", () => {
 
       const response = await request(app)
         .patch(`/api/v1/streams/${validId}`)
+        .set("x-api-key", "test-1234")
         .send({ ...updateData, updatedAt: "2023-01-01T00:00:00.000Z" });
 
       expect(response.status).toBe(404);

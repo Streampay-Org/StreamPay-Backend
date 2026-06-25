@@ -1,6 +1,6 @@
-import { and, desc, eq, sql, type SQL } from "drizzle-orm";
+import { and, desc, asc, eq, or, gt, sql, type SQL } from "drizzle-orm";
 import { db } from "../db/index";
-import { Stream, streams } from "../db/schema";
+import { Stream, streams, NewStream } from "../db/schema";
 
 /**
  * Filters for {@link StreamRepository.findAll}.
@@ -127,6 +127,75 @@ export class StreamRepository {
       .returning();
 
     return result[0] ?? null;
+  }
+
+  async softDeleteById(id: string): Promise<boolean> {
+    const result = await db
+      .update(streams)
+      .set({ deletedAt: new Date() })
+      .where(eq(streams.id, id));
+
+    const affected = typeof result === "number" ? result : (result?.rowCount ?? 0);
+    return affected > 0;
+  }
+
+  async findForExport(params: ExportParams): Promise<ExportBatch> {
+    const batchSize = params.batchSize ?? 500;
+    const conditions: SQL[] = [];
+
+    if (params.payer) {
+      conditions.push(eq(streams.payer, params.payer));
+    }
+    if (params.recipient) {
+      conditions.push(eq(streams.recipient, params.recipient));
+    }
+    if (params.status) {
+      conditions.push(eq(streams.status, params.status));
+    }
+
+    // Exclude soft-deleted rows by default
+    conditions.push(sql`${streams.deletedAt} IS NULL`);
+
+    // Keyset pagination cursor
+    if (params.cursorCreatedAt && params.cursorId) {
+      conditions.push(
+        or(
+          gt(streams.createdAt, params.cursorCreatedAt),
+          and(
+            eq(streams.createdAt, params.cursorCreatedAt),
+            gt(streams.id, params.cursorId)
+          )
+        )!
+      );
+    }
+
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const data = await db
+      .select()
+      .from(streams)
+      .where(whereClause)
+      .orderBy(asc(streams.createdAt), asc(streams.id))
+      .limit(batchSize + 1);
+
+    const hasMore = data.length > batchSize;
+    const rows = hasMore ? data.slice(0, batchSize) : data;
+    const nextCursor = hasMore && rows.length > 0
+      ? { createdAt: rows[rows.length - 1].createdAt, id: rows[rows.length - 1].id }
+      : null;
+
+    return {
+      rows,
+      nextCursor,
+    };
+  }
+
+  async create(data: NewStream): Promise<Stream> {
+    const [created] = await db.insert(streams).values(data).returning();
+    if (!created) {
+      throw new Error("Stream insert did not return a row");
+    }
+    return created;
   }
 
   private calculateAccruedEstimate(stream: Stream): number {

@@ -172,6 +172,11 @@ const getApiKeyFromRequest = (req: Request): string | undefined => {
 };
 
 export const apiKeyAuthMiddleware = (req: Request, res: Response, next: NextFunction) => {
+  if (req.path === "/streams/export.csv") {
+    next();
+    return;
+  }
+
   const apiKey = getApiKeyFromRequest(req);
 
   if (!apiKey) {
