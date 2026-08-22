@@ -116,6 +116,65 @@ registry.registerPath({
   },
 });
 
+// GET /api/v1/streams/events — SSE all streams
+registry.registerPath({
+  method: "get",
+  path: "/api/v1/streams/events",
+  description:
+    "Server-Sent Events stream of updates for all streams. Requires x-api-key header. " +
+    "Emits `stream-update` events when stream status or balance snapshot changes.",
+  summary: "Stream Updates (SSE, all streams)",
+  responses: {
+    200: {
+      description: "SSE stream (text/event-stream). Events: stream-update.",
+    },
+    401: {
+      description: "Missing or invalid API key",
+      content: {
+        "application/json": {
+          schema: ErrorSchema,
+        },
+      },
+    },
+  },
+});
+
+// GET /api/v1/streams/{id}/events — SSE single stream
+registry.registerPath({
+  method: "get",
+  path: "/api/v1/streams/{id}/events",
+  description:
+    "Server-Sent Events stream of updates for a single stream. Requires x-api-key header. " +
+    "Emits `stream-update` events when the stream's status or balance snapshot changes.",
+  summary: "Stream Updates (SSE, single stream)",
+  request: {
+    params: z.object({
+      id: z.string().uuid().openapi({ description: "The unique identifier of the stream" }),
+    }),
+  },
+  responses: {
+    200: {
+      description: "SSE stream (text/event-stream). Events: stream-update.",
+    },
+    400: {
+      description: "Invalid stream ID format",
+      content: {
+        "application/json": {
+          schema: ErrorSchema,
+        },
+      },
+    },
+    401: {
+      description: "Missing or invalid API key",
+      content: {
+        "application/json": {
+          schema: ErrorSchema,
+        },
+      },
+    },
+  },
+});
+
 export function generateOpenApi() {
   const generator = new OpenApiGeneratorV3(registry.definitions);
 

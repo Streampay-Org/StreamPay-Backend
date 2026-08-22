@@ -15,6 +15,8 @@ describe("OpenAPI Specification", () => {
     expect(spec.paths).toHaveProperty("/health");
     expect(spec.paths).toHaveProperty("/api/v1/streams");
     expect(spec.paths).toHaveProperty("/api/v1/streams/{id}");
+    expect(spec.paths).toHaveProperty("/api/v1/streams/events");
+    expect(spec.paths).toHaveProperty("/api/v1/streams/{id}/events");
   });
 
   it("should match the snapshot", () => {

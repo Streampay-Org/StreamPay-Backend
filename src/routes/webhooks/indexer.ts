@@ -2,6 +2,7 @@ import express, { Request, Response, Router } from "express";
 
 import { apiKeyAuthMiddleware } from "../../middleware/apiKeyAuth";
 import { eventIngestionService } from "../../services/eventIngestionService";
+import { sseHub } from "../../services/sseHub";
 
 export const INDEXER_WEBHOOK_BODY_LIMIT = "100kb";
 
@@ -37,6 +38,16 @@ router.post(
         message: result.message,
       });
     }
+
+    // Publish the accepted event to real-time subscribers (SSE).
+    // Duplicate (replayed) events are still published so subscribers can
+    // reconcile, but the HTTP response distinguishes them.
+    sseHub.publish({
+      eventType: result.event.eventType,
+      streamId: result.event.streamId,
+      occurredAt: result.event.occurredAt,
+      data: result.event.data,
+    });
 
     return res.status(result.duplicate ? 202 : 200).json({
       accepted: true,
