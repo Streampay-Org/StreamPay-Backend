@@ -327,6 +327,34 @@ describe("POST /webhooks/indexer - settlement idempotency", () => {
     });
   });
 
+  it("returns 409 when an event id is reused with a different settlement payload", async () => {
+    const firstBody = JSON.stringify(settledPayload);
+    const conflictingBody = JSON.stringify({
+      ...settledPayload,
+      data: { amount: "999", settledAt: settledPayload.occurredAt },
+    });
+
+    const firstResponse = await request(app)
+      .post("/webhooks/indexer")
+      .set("Content-Type", "application/json")
+      .set("x-api-key", "test-1234")
+      .set("x-indexer-signature", sign(firstBody))
+      .send(firstBody);
+    const conflictResponse = await request(app)
+      .post("/webhooks/indexer")
+      .set("Content-Type", "application/json")
+      .set("x-api-key", "test-1234")
+      .set("x-indexer-signature", sign(conflictingBody))
+      .send(conflictingBody);
+
+    expect(firstResponse.status).toBe(200);
+    expect(conflictResponse.status).toBe(409);
+    expect(conflictResponse.body).toEqual({
+      error: "idempotency_conflict",
+      message: "The event id is already bound to a different payload.",
+    });
+  });
+
   it("ensures settled event processing is idempotent across multiple deliveries", async () => {
     const body = JSON.stringify(settledPayload);
     const signature = sign(body);

@@ -117,6 +117,10 @@ export type NewWebhookDelivery = typeof webhookDeliveries.$inferInsert;
 
 export const processedIndexerEvents = pgTable("processed_indexer_events", {
   eventId: varchar("event_id", { length: 255 }).primaryKey(),
+  /** SHA-256 of the canonical event payload bound to this immutable event id. */
+  payloadHash: varchar("payload_hash", { length: 64 }).notNull(),
+  /** Claim state used to distinguish active work from completed replays. */
+  status: varchar("status", { length: 16 }).$type<"processing" | "completed" | "failed">().notNull().default("processing"),
   receivedAt: timestamp("received_at").defaultNow().notNull(),
 });
 

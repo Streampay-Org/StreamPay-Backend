@@ -26,7 +26,9 @@ export type IngestionFailureCode =
   | "invalid_signature"
   | "invalid_json"
   | "invalid_payload"
-  | "idempotency_unavailable";
+  | "idempotency_unavailable"
+  | "idempotency_conflict"
+  | "settlement_in_progress";
 
 export type IngestionFailureResult = {
   accepted: false;
@@ -81,9 +83,10 @@ export class EventIngestionService {
       };
     }
 
-    let firstDelivery: boolean;
+    const fingerprint = fingerprintEvent(event);
+    let claim: Awaited<ReturnType<ProcessedIndexerEventStore["claim"]>>;
     try {
-      firstDelivery = await this.processedEvents.record(event.eventId);
+      claim = await this.processedEvents.claim(event.eventId, fingerprint);
     } catch {
       return {
         accepted: false,
@@ -92,9 +95,38 @@ export class EventIngestionService {
       };
     }
 
+    if (claim.kind === "conflict") {
+      return {
+        accepted: false,
+        code: "idempotency_conflict",
+        message: "The event id is already bound to a different payload.",
+      };
+    }
+
+    if (claim.kind === "in_progress") {
+      return {
+        accepted: false,
+        code: "settlement_in_progress",
+        message: "Settlement for this event is already being processed.",
+      };
+    }
+
+    if (claim.kind === "claimed") {
+      try {
+        await this.processedEvents.complete(event.eventId);
+      } catch {
+        await this.processedEvents.fail(event.eventId).catch(() => undefined);
+        return {
+          accepted: false,
+          code: "idempotency_unavailable",
+          message: "Webhook replay protection is unavailable.",
+        };
+      }
+    }
+
     return {
       accepted: true,
-      duplicate: !firstDelivery,
+      duplicate: claim.kind === "duplicate",
       event,
     };
   }
@@ -142,6 +174,25 @@ export class EventIngestionService {
   private isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === "object" && value !== null && !Array.isArray(value);
   }
+}
+
+/**
+ * Produce a stable identity for the complete parsed event rather than relying
+ * on raw JSON property order. This binds retries to the same business payload
+ * while still allowing semantically equivalent JSON bodies to replay safely.
+ */
+function fingerprintEvent(event: IndexerEventPayload): string {
+  return crypto.createHash("sha256").update(canonicalize(event)).digest("hex");
+}
+
+function canonicalize(value: unknown): string {
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(canonicalize).join(",")}]`;
+
+  const entries = Object.entries(value as Record<string, unknown>)
+    .filter(([, entry]) => entry !== undefined)
+    .sort(([left], [right]) => left.localeCompare(right));
+  return `{${entries.map(([key, entry]) => `${JSON.stringify(key)}:${canonicalize(entry)}`).join(",")}}`;
 }
 
 function createDefaultReplayStore(): ProcessedIndexerEventStore {
