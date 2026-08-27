@@ -15,6 +15,8 @@ import { apiKeyAuthMiddleware } from "./middleware/apiKeyAuth";
 import { webhookRepository } from "./repositories/webhookRepository";
 import indexerWebhookRouter from "./routes/webhooks/indexer";
 import { WebhookDeliveryService } from "./services/webhookDeliveryService";
+import { correlationIdMiddleware } from "./telemetry/correlation";
+import { metricsHandler, metricsMiddleware } from "./metrics/prometheus";
 
 export const JSON_BODY_LIMIT = "100kb";
 export const JSON_BODY_LIMIT_BYTES = 100 * 1024;
@@ -68,6 +70,7 @@ const app = express();
 const PORT = env.PORT;
 
 app.use(cors());
+app.use(correlationIdMiddleware);
 
 app.use("/webhooks/indexer", indexerWebhookRouter);
 
@@ -82,6 +85,9 @@ app.get("/health", (_req: Request, res: Response) => {
 app.get("/api/openapi.json", (_req: Request, res: Response) => {
   res.json(generateOpenApi());
 });
+
+app.get("/metrics", metricsHandler);
+app.use(metricsMiddleware);
 
 app.use(
   "/api/v1",

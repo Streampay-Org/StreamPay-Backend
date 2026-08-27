@@ -1,3 +1,6 @@
+import { recordDependencyOperation } from "../metrics/prometheus";
+import { getCorrelationId, logStructured } from "../telemetry/correlation";
+
 export type TransactionSignerMode = "backend_sign" | "external_signer";
 
 export interface TransactionServiceConfig {
@@ -185,6 +188,10 @@ export class TransactionService {
 
     try {
       const result = await this.networkClient.submitSignedTransaction(signedXdr);
+      recordDependencyOperation("horizon", "submit_transaction", "success");
+      logStructured("info", "ledger_submission_completed", {
+        correlationId: getCorrelationId(), dependency: "horizon", operation: "submit_transaction", outcome: "success",
+      });
       return {
         status: "submitted",
         mode,
@@ -193,6 +200,11 @@ export class TransactionService {
         signedXdr,
       };
     } catch (error) {
+      recordDependencyOperation("horizon", "submit_transaction", "failure");
+      logStructured("error", "ledger_submission_failed", {
+        correlationId: getCorrelationId(), dependency: "horizon", operation: "submit_transaction", outcome: "failure",
+        errorCode: error instanceof Error ? error.name : "unknown",
+      });
       throw this.toSafeError("Failed to submit transaction", error);
     }
   }

@@ -19,6 +19,7 @@ export type IndexerEventPayload = {
   transactionHash?: string;
   sequence?: number;
   data?: Record<string, unknown>;
+  correlationId?: string;
 };
 
 export type IngestionSuccessResult = {
@@ -54,7 +55,7 @@ export class EventIngestionService {
     private readonly meteringCheckpoints: MeteringCheckpointStore = createDefaultMeteringCheckpointStore(),
   ) {}
 
-  async ingest(rawBody: Buffer, signatureHeader: string | undefined): Promise<IngestionResult> {
+  async ingest(rawBody: Buffer, signatureHeader: string | undefined, correlationId?: string): Promise<IngestionResult> {
     const secret = process.env.INDEXER_WEBHOOK_SECRET;
 
     if (!secret) {
@@ -180,7 +181,7 @@ export class EventIngestionService {
     return {
       accepted: true,
       duplicate: claim.kind === "duplicate",
-      event,
+      event: { ...event, correlationId },
     };
   }
 

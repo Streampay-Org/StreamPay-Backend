@@ -26,6 +26,28 @@ export const syncLagGauge = new client.Gauge({
 
 register.registerMetric(syncLagGauge);
 
+export const dependencyOperationsTotal = new client.Counter({
+  name: "streampay_dependency_operations_total",
+  help: "Dependency operations grouped by bounded dependency and outcome.",
+  labelNames: ["dependency", "operation", "outcome"],
+});
+register.registerMetric(dependencyOperationsTotal);
+
+export const indexerEventsTotal = new client.Counter({
+  name: "streampay_indexer_events_total",
+  help: "Indexer webhook events grouped by bounded event type and outcome.",
+  labelNames: ["event_type", "outcome"],
+});
+register.registerMetric(indexerEventsTotal);
+
+export function recordDependencyOperation(
+  dependency: string,
+  operation: string,
+  outcome: "success" | "failure" | "retry" | "dead_letter",
+): void {
+  dependencyOperationsTotal.labels(dependency, operation, outcome).inc();
+}
+
 /**
  * Middleware to track HTTP request duration and error rates.
  */

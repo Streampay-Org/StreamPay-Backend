@@ -11,6 +11,8 @@
 import crypto from "crypto";
 import { WebhookRepository } from "../repositories/webhookRepository";
 import { WebhookDelivery } from "../db/schema";
+import { recordDependencyOperation } from "../metrics/prometheus";
+import { getCorrelationId, logStructured } from "../telemetry/correlation";
 
 export const MAX_ATTEMPTS = 5;
 /** Base delay in ms; actual delay = BASE_DELAY_MS * 2^(attempt-1), capped at MAX_DELAY_MS. */
@@ -22,6 +24,7 @@ export type OutboundEvent = {
   streamId: string;
   occurredAt: string;
   data?: Record<string, unknown>;
+  correlationId?: string;
 };
 
 /** Compute HMAC-SHA256 signature over the raw payload string. */
@@ -87,6 +90,7 @@ export class WebhookDeliveryService {
 
     const attempts = delivery.attempts + 1;
     const signature = signPayload(delivery.payload, sub.secret);
+    const correlationId = this.correlationIdFromPayload(delivery.payload) ?? getCorrelationId();
 
     let httpStatus: number | undefined;
     let errorMessage: string | undefined;
@@ -98,6 +102,7 @@ export class WebhookDeliveryService {
           "Content-Type": "application/json",
           "X-StreamPay-Signature": signature,
           "X-StreamPay-Event": delivery.eventType,
+          ...(correlationId ? { "X-StreamPay-Correlation-Id": correlationId } : {}),
         },
         body: delivery.payload,
         signal: AbortSignal.timeout(10_000),
@@ -110,6 +115,10 @@ export class WebhookDeliveryService {
           status: "success",
           attempts,
           lastHttpStatus: httpStatus,
+        });
+        recordDependencyOperation("subscriber", "webhook_delivery", "success");
+        logStructured("info", "webhook_delivery_completed", {
+          correlationId, eventType: delivery.eventType, outcome: "success", attempt: attempts,
         });
         return;
       }
@@ -127,6 +136,10 @@ export class WebhookDeliveryService {
         lastHttpStatus: httpStatus,
         lastError: errorMessage,
       });
+      recordDependencyOperation("subscriber", "webhook_delivery", "dead_letter");
+      logStructured("error", "webhook_delivery_dead_letter", {
+        correlationId, eventType: delivery.eventType, outcome: "dead_letter", attempt: attempts,
+      });
     } else {
       const delayMs = nextRetryDelay(attempts);
       const nextAttemptAt = new Date(Date.now() + delayMs);
@@ -137,6 +150,19 @@ export class WebhookDeliveryService {
         lastError: errorMessage,
         nextAttemptAt,
       });
+      recordDependencyOperation("subscriber", "webhook_delivery", "retry");
+      logStructured("warn", "webhook_delivery_retry", {
+        correlationId, eventType: delivery.eventType, outcome: "retry", attempt: attempts,
+      });
+    }
+  }
+
+  private correlationIdFromPayload(payload: string): string | undefined {
+    try {
+      const value = JSON.parse(payload) as { correlationId?: unknown };
+      return typeof value.correlationId === "string" ? value.correlationId : undefined;
+    } catch {
+      return undefined;
     }
   }
 
