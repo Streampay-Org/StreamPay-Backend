@@ -22,6 +22,13 @@
       "when": 1781680800000,
       "tag": "0002_create_processed_indexer_events",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1787824500000,
+      "tag": "0003_metering_checkpoints",
+      "breakpoints": true
     }
   ]
 }

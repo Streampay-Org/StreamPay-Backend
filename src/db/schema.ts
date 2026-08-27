@@ -10,6 +10,7 @@ import {
   text,
   timestamp,
   uuid,
+  uniqueIndex,
   varchar,
 } from "drizzle-orm/pg-core";
 
@@ -126,3 +127,17 @@ export const processedIndexerEvents = pgTable("processed_indexer_events", {
 
 export type ProcessedIndexerEvent = typeof processedIndexerEvents.$inferSelect;
 export type NewProcessedIndexerEvent = typeof processedIndexerEvents.$inferInsert;
+
+export const meteringEventCheckpoints = pgTable("metering_event_checkpoints", {
+  /** Event identity is unique across all streams. */
+  eventId: varchar("event_id", { length: 255 }).primaryKey(),
+  streamId: varchar("stream_id", { length: 255 }).notNull(),
+  sequence: integer("sequence").notNull(),
+  receivedAt: timestamp("received_at").defaultNow().notNull(),
+}, (table) => ({
+  streamSequenceIdx: uniqueIndex("metering_event_checkpoints_stream_sequence_idx")
+    .on(table.streamId, table.sequence),
+}));
+
+export type MeteringEventCheckpoint = typeof meteringEventCheckpoints.$inferSelect;
+export type NewMeteringEventCheckpoint = typeof meteringEventCheckpoints.$inferInsert;

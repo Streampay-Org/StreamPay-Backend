@@ -32,6 +32,8 @@ router.post(
         idempotency_unavailable: 503,
         idempotency_conflict: 409,
         settlement_in_progress: 409,
+        metering_gap: 409,
+        late_metering_event: 409,
       } as const;
 
       return res.status(statusByCode[result.code]).json({
