@@ -1,15 +1,152 @@
-// Jest Snapshot v1, https://goo.gl/fbAQLP
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
 
 exports[`OpenAPI Specification should match the snapshot 1`] = `
 {
   "components": {
     "parameters": {},
     "schemas": {
+      "AccrualPreview": {
+        "properties": {
+          "accruedAmount": {
+            "example": "0.050000000",
+            "type": "string",
+          },
+          "calculationTimestamp": {
+            "format": "date-time",
+            "type": "string",
+          },
+          "disclaimer": {
+            "type": "string",
+          },
+          "note": {
+            "type": "string",
+          },
+          "status": {
+            "description": "Lifecycle state of the payment stream.",
+            "enum": [
+              "active",
+              "paused",
+              "cancelled",
+              "completed",
+            ],
+            "example": "active",
+            "type": "string",
+          },
+          "streamId": {
+            "format": "uuid",
+            "type": "string",
+          },
+        },
+        "required": [
+          "streamId",
+          "accruedAmount",
+          "calculationTimestamp",
+          "status",
+          "disclaimer",
+          "note",
+        ],
+        "type": "object",
+      },
+      "CreateStream": {
+        "properties": {
+          "endTime": {
+            "format": "date-time",
+            "type": "string",
+          },
+          "payer": {
+            "example": "G...payer",
+            "minLength": 1,
+            "type": "string",
+          },
+          "ratePerSecond": {
+            "example": "0.000001",
+            "pattern": "^\\d+(\\.\\d+)?$",
+            "type": "string",
+          },
+          "recipient": {
+            "example": "G...recipient",
+            "minLength": 1,
+            "type": "string",
+          },
+          "startTime": {
+            "example": "2026-01-01T00:00:00.000Z",
+            "format": "date-time",
+            "type": "string",
+          },
+          "totalAmount": {
+            "example": "100.0",
+            "pattern": "^\\d+(\\.\\d+)?$",
+            "type": "string",
+          },
+        },
+        "required": [
+          "payer",
+          "recipient",
+          "ratePerSecond",
+          "startTime",
+          "totalAmount",
+        ],
+        "type": "object",
+      },
+      "CreateWebhook": {
+        "properties": {
+          "eventTypes": {
+            "description": "Event types to receive; omit or use an empty array for all events.",
+            "items": {
+              "minLength": 1,
+              "type": "string",
+            },
+            "type": "array",
+          },
+          "url": {
+            "example": "https://example.com/stream-events",
+            "format": "uri",
+            "type": "string",
+          },
+        },
+        "required": [
+          "url",
+        ],
+        "type": "object",
+      },
+      "CreatedWebhook": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Webhook",
+          },
+          {
+            "default": undefined,
+            "properties": {
+              "secret": {
+                "description": "One-time HMAC signing secret.",
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string",
+              },
+            },
+            "required": [
+              "secret",
+            ],
+            "type": "object",
+          },
+        ],
+      },
       "Error": {
         "properties": {
+          "details": {
+            "additionalProperties": {
+              "items": {
+                "type": "string",
+              },
+              "type": "array",
+            },
+            "type": "object",
+          },
           "error": {
-            "description": "Error message",
-            "example": "Invalid stream ID format",
+            "description": "Stable or human-readable error code.",
+            "type": "string",
+          },
+          "message": {
+            "description": "Additional error context.",
             "type": "string",
           },
         },
@@ -20,16 +157,41 @@ exports[`OpenAPI Specification should match the snapshot 1`] = `
       },
       "Health": {
         "properties": {
+          "details": {
+            "properties": {
+              "database": {
+                "enum": [
+                  "healthy",
+                  "unhealthy",
+                ],
+                "type": "string",
+              },
+              "rpc": {
+                "enum": [
+                  "healthy",
+                  "unhealthy",
+                  "disabled",
+                ],
+                "type": "string",
+              },
+            },
+            "type": "object",
+          },
           "service": {
             "example": "streampay-backend",
             "type": "string",
           },
           "status": {
+            "enum": [
+              "ok",
+              "error",
+            ],
             "example": "ok",
             "type": "string",
           },
           "timestamp": {
-            "example": "2024-03-24T20:00:00Z",
+            "example": "2026-01-01T00:00:00.000Z",
+            "format": "date-time",
             "type": "string",
           },
         },
@@ -40,91 +202,145 @@ exports[`OpenAPI Specification should match the snapshot 1`] = `
         ],
         "type": "object",
       },
+      "IndexerAccepted": {
+        "properties": {
+          "accepted": {
+            "enum": [
+              true,
+            ],
+            "type": "boolean",
+          },
+          "duplicate": {
+            "type": "boolean",
+          },
+          "eventId": {
+            "type": "string",
+          },
+          "eventType": {
+            "type": "string",
+          },
+        },
+        "required": [
+          "accepted",
+          "duplicate",
+          "eventId",
+          "eventType",
+        ],
+        "type": "object",
+      },
+      "IndexerWebhook": {
+        "properties": {
+          "chainId": {
+            "type": "string",
+          },
+          "data": {
+            "additionalProperties": {
+              "nullable": true,
+            },
+            "type": "object",
+          },
+          "eventId": {
+            "minLength": 1,
+            "type": "string",
+          },
+          "eventType": {
+            "minLength": 1,
+            "type": "string",
+          },
+          "occurredAt": {
+            "minLength": 1,
+            "type": "string",
+          },
+          "streamId": {
+            "minLength": 1,
+            "type": "string",
+          },
+          "transactionHash": {
+            "type": "string",
+          },
+        },
+        "required": [
+          "eventId",
+          "eventType",
+          "streamId",
+          "occurredAt",
+        ],
+        "type": "object",
+      },
       "Stream": {
         "properties": {
           "accruedEstimate": {
-            "description": "Estimated accrued amount since last settlement",
-            "example": "0.05",
+            "description": "Estimated amount accrued since settlement.",
+            "type": "string",
+          },
+          "chainId": {
+            "type": "string",
+          },
+          "contractAddress": {
+            "nullable": true,
             "type": "string",
           },
           "createdAt": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string",
-              },
-              {
-                "type": "string",
-              },
-            ],
-            "description": "Creation timestamp",
-            "example": "2024-03-24T19:00:00Z",
+            "format": "date-time",
+            "type": "string",
+          },
+          "deletedAt": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string",
           },
           "endTime": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string",
-              },
-              {
-                "type": "string",
-              },
-              {
-                "nullable": true,
-              },
-            ],
-            "description": "End time of the stream (optional)",
-            "example": "2024-12-24T20:00:00Z",
+            "example": null,
+            "format": "date-time",
+            "nullable": true,
+            "type": "string",
           },
           "id": {
-            "description": "Unique identifier for the stream",
-            "example": "550e8400-e29b-411d-a716-446655440000",
+            "description": "Unique stream identifier.",
             "format": "uuid",
             "type": "string",
           },
+          "labels": {
+            "items": {
+              "type": "string",
+            },
+            "type": "array",
+          },
           "lastSettledAt": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string",
-              },
-              {
-                "type": "string",
-              },
-            ],
-            "description": "Last time the stream was settled",
-            "example": "2024-03-24T20:05:00Z",
+            "example": "2026-01-01T00:00:00.000Z",
+            "format": "date-time",
+            "type": "string",
+          },
+          "metadata": {
+            "nullable": true,
+            "type": "string",
+          },
+          "offChainMemo": {
+            "nullable": true,
+            "type": "string",
           },
           "payer": {
-            "description": "Address of the payer",
-            "example": "0x1234567890123456789012345678901234567890",
+            "description": "Address or account that funds the stream.",
+            "minLength": 1,
             "type": "string",
           },
           "ratePerSecond": {
-            "description": "Payment rate per second",
             "example": "0.0001",
+            "pattern": "^\\d+(\\.\\d+)?$",
             "type": "string",
           },
           "recipient": {
-            "description": "Address of the recipient",
-            "example": "0x0987654321098765432109876543210987654321",
+            "description": "Address or account that receives the stream.",
+            "minLength": 1,
             "type": "string",
           },
           "startTime": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string",
-              },
-              {
-                "type": "string",
-              },
-            ],
-            "description": "Start time of the stream",
-            "example": "2024-03-24T20:00:00Z",
+            "example": "2026-01-01T00:00:00.000Z",
+            "format": "date-time",
+            "type": "string",
           },
           "status": {
-            "description": "Status of the payment stream",
+            "description": "Lifecycle state of the payment stream.",
             "enum": [
               "active",
               "paused",
@@ -135,22 +351,17 @@ exports[`OpenAPI Specification should match the snapshot 1`] = `
             "type": "string",
           },
           "totalAmount": {
-            "description": "Total amount allocated for the stream",
             "example": "100.0",
+            "pattern": "^\\d+(\\.\\d+)?$",
+            "type": "string",
+          },
+          "transactionHash": {
+            "nullable": true,
             "type": "string",
           },
           "updatedAt": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string",
-              },
-              {
-                "type": "string",
-              },
-            ],
-            "description": "Last update timestamp",
-            "example": "2024-03-24T20:00:00Z",
+            "format": "date-time",
+            "type": "string",
           },
         },
         "required": [
@@ -171,14 +382,15 @@ exports[`OpenAPI Specification should match the snapshot 1`] = `
       "StreamList": {
         "properties": {
           "limit": {
-            "description": "Number of streams returned in this batch",
             "example": 20,
-            "type": "number",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer",
           },
           "offset": {
-            "description": "Offset for pagination",
             "example": 0,
-            "type": "number",
+            "minimum": 0,
+            "type": "integer",
           },
           "streams": {
             "items": {
@@ -187,9 +399,9 @@ exports[`OpenAPI Specification should match the snapshot 1`] = `
             "type": "array",
           },
           "total": {
-            "description": "Total number of streams matching the criteria",
             "example": 100,
-            "type": "number",
+            "minimum": 0,
+            "type": "integer",
           },
         },
         "required": [
@@ -200,10 +412,119 @@ exports[`OpenAPI Specification should match the snapshot 1`] = `
         ],
         "type": "object",
       },
+      "UpdateStream": {
+        "additionalProperties": false,
+        "properties": {
+          "labels": {
+            "items": {
+              "type": "string",
+            },
+            "type": "array",
+          },
+          "offChainMemo": {
+            "nullable": true,
+            "type": "string",
+          },
+          "status": {
+            "description": "Lifecycle state of the payment stream.",
+            "enum": [
+              "active",
+              "paused",
+              "cancelled",
+              "completed",
+            ],
+            "example": "active",
+            "type": "string",
+          },
+          "updatedAt": {
+            "description": "Expected current timestamp for optimistic locking.",
+            "format": "date-time",
+            "type": "string",
+          },
+        },
+        "type": "object",
+      },
+      "ValidationError": {
+        "properties": {
+          "details": {
+            "additionalProperties": {
+              "items": {
+                "type": "string",
+              },
+              "type": "array",
+            },
+            "type": "object",
+          },
+          "error": {
+            "enum": [
+              "Validation failed",
+            ],
+            "type": "string",
+          },
+        },
+        "required": [
+          "error",
+          "details",
+        ],
+        "type": "object",
+      },
+      "Webhook": {
+        "properties": {
+          "createdAt": {
+            "format": "date-time",
+            "type": "string",
+          },
+          "enabled": {
+            "type": "boolean",
+          },
+          "eventTypes": {
+            "items": {
+              "type": "string",
+            },
+            "type": "array",
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string",
+          },
+          "url": {
+            "format": "uri",
+            "type": "string",
+          },
+        },
+        "required": [
+          "id",
+          "url",
+          "eventTypes",
+          "enabled",
+          "createdAt",
+        ],
+        "type": "object",
+      },
+    },
+    "securitySchemes": {
+      "apiKeyAuthorization": {
+        "description": "Use the \`ApiKey <key>\` authorization scheme.",
+        "in": "header",
+        "name": "Authorization",
+        "type": "apiKey",
+      },
+      "apiKeyHeader": {
+        "description": "Service API key.",
+        "in": "header",
+        "name": "x-api-key",
+        "type": "apiKey",
+      },
+      "jwtBearer": {
+        "bearerFormat": "JWT",
+        "description": "JWT required by the CSV export handler in addition to the API key.",
+        "scheme": "bearer",
+        "type": "http",
+      },
     },
   },
   "info": {
-    "description": "API for managing payment streams, metering, and settlement.",
+    "description": "API for managing payment streams, metering, settlement, and signed webhooks.",
     "title": "StreamPay API",
     "version": "1.0.0",
   },
@@ -211,35 +532,31 @@ exports[`OpenAPI Specification should match the snapshot 1`] = `
   "paths": {
     "/api/v1/streams": {
       "get": {
-        "description": "Get a list of payment streams",
+        "operationId": "listStreams",
         "parameters": [
           {
-            "description": "Filter by payer address",
             "in": "query",
             "name": "payer",
             "required": false,
             "schema": {
-              "description": "Filter by payer address",
               "type": "string",
             },
           },
           {
-            "description": "Filter by recipient address",
             "in": "query",
             "name": "recipient",
             "required": false,
             "schema": {
-              "description": "Filter by recipient address",
               "type": "string",
             },
           },
           {
-            "description": "Status of the payment stream",
+            "description": "Lifecycle state of the payment stream.",
             "in": "query",
             "name": "status",
             "required": false,
             "schema": {
-              "description": "Status of the payment stream",
+              "description": "Lifecycle state of the payment stream.",
               "enum": [
                 "active",
                 "paused",
@@ -251,25 +568,25 @@ exports[`OpenAPI Specification should match the snapshot 1`] = `
             },
           },
           {
-            "description": "Number of records to return",
             "in": "query",
             "name": "limit",
             "required": false,
             "schema": {
-              "description": "Number of records to return",
-              "example": "20",
-              "type": "string",
+              "example": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer",
             },
           },
           {
-            "description": "Number of records to skip",
             "in": "query",
             "name": "offset",
             "required": false,
             "schema": {
-              "description": "Number of records to skip",
-              "example": "0",
-              "type": "string",
+              "example": 0,
+              "minimum": 0,
+              "nullable": true,
+              "type": "integer",
             },
           },
         ],
@@ -282,7 +599,37 @@ exports[`OpenAPI Specification should match the snapshot 1`] = `
                 },
               },
             },
-            "description": "List of streams",
+            "description": "A paginated stream list.",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Bad request.",
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "API key missing, invalid, or revoked.",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Resource not found.",
           },
           "500": {
             "content": {
@@ -292,24 +639,283 @@ exports[`OpenAPI Specification should match the snapshot 1`] = `
                 },
               },
             },
-            "description": "Internal server error",
+            "description": "Internal server error.",
           },
         },
-        "summary": "List Streams",
+        "security": [
+          {
+            "apiKeyHeader": [],
+          },
+          {
+            "apiKeyAuthorization": [],
+          },
+        ],
+        "summary": "List payment streams",
+        "tags": [
+          "Streams",
+        ],
+      },
+      "post": {
+        "operationId": "createStream",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateStream",
+              },
+            },
+          },
+          "required": true,
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Stream",
+                },
+              },
+            },
+            "description": "The newly created stream.",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError",
+                },
+              },
+            },
+            "description": "Request validation failed.",
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "API key missing, invalid, or revoked.",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Resource not found.",
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Internal server error.",
+          },
+        },
+        "security": [
+          {
+            "apiKeyHeader": [],
+          },
+          {
+            "apiKeyAuthorization": [],
+          },
+        ],
+        "summary": "Create a payment stream",
+        "tags": [
+          "Streams",
+        ],
+      },
+    },
+    "/api/v1/streams/export.csv": {
+      "get": {
+        "operationId": "exportStreamsCsv",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "payer",
+            "required": false,
+            "schema": {
+              "type": "string",
+            },
+          },
+          {
+            "in": "query",
+            "name": "recipient",
+            "required": false,
+            "schema": {
+              "type": "string",
+            },
+          },
+          {
+            "description": "Lifecycle state of the payment stream.",
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "description": "Lifecycle state of the payment stream.",
+              "enum": [
+                "active",
+                "paused",
+                "cancelled",
+                "completed",
+              ],
+              "example": "active",
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "description": "RFC 4180 CSV stream of matching payment streams.",
+                  "format": "binary",
+                  "type": "string",
+                },
+              },
+            },
+            "description": "RFC 4180 stream export.",
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "API key or JWT is missing/invalid.",
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Export failed.",
+          },
+        },
+        "security": [
+          {
+            "apiKeyHeader": [],
+            "jwtBearer": [],
+          },
+          {
+            "apiKeyAuthorization": [],
+            "jwtBearer": [],
+          },
+        ],
+        "summary": "Export streams as CSV",
+        "tags": [
+          "Streams",
+        ],
       },
     },
     "/api/v1/streams/{id}": {
-      "get": {
-        "description": "Get details of a specific payment stream",
+      "delete": {
+        "operationId": "deleteStream",
         "parameters": [
           {
-            "description": "The unique identifier of the stream",
             "in": "path",
             "name": "id",
             "required": true,
             "schema": {
-              "description": "The unique identifier of the stream",
+              "example": "550e8400-e29b-41d4-a716-446655440000",
               "format": "uuid",
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "204": {
+            "description": "Stream soft-deleted.",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Bad request.",
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "API key missing, invalid, or revoked.",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Resource not found.",
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Internal server error.",
+          },
+        },
+        "security": [
+          {
+            "apiKeyHeader": [],
+          },
+          {
+            "apiKeyAuthorization": [],
+          },
+        ],
+        "summary": "Soft-delete a payment stream",
+        "tags": [
+          "Streams",
+        ],
+      },
+      "get": {
+        "operationId": "getStream",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "example": "550e8400-e29b-41d4-a716-446655440000",
+              "format": "uuid",
+              "type": "string",
+            },
+          },
+          {
+            "in": "query",
+            "name": "includeDeleted",
+            "required": false,
+            "schema": {
+              "enum": [
+                "true",
+                "false",
+              ],
               "type": "string",
             },
           },
@@ -323,7 +929,7 @@ exports[`OpenAPI Specification should match the snapshot 1`] = `
                 },
               },
             },
-            "description": "Stream details",
+            "description": "The requested stream.",
           },
           "400": {
             "content": {
@@ -333,7 +939,17 @@ exports[`OpenAPI Specification should match the snapshot 1`] = `
                 },
               },
             },
-            "description": "Invalid stream ID format",
+            "description": "Bad request.",
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "API key missing, invalid, or revoked.",
           },
           "404": {
             "content": {
@@ -343,7 +959,7 @@ exports[`OpenAPI Specification should match the snapshot 1`] = `
                 },
               },
             },
-            "description": "Stream not found",
+            "description": "Resource not found.",
           },
           "500": {
             "content": {
@@ -353,15 +969,423 @@ exports[`OpenAPI Specification should match the snapshot 1`] = `
                 },
               },
             },
-            "description": "Internal server error",
+            "description": "Internal server error.",
           },
         },
-        "summary": "Get Stream",
+        "security": [
+          {
+            "apiKeyHeader": [],
+          },
+          {
+            "apiKeyAuthorization": [],
+          },
+        ],
+        "summary": "Get a payment stream",
+        "tags": [
+          "Streams",
+        ],
+      },
+      "patch": {
+        "description": "Supports labels, memo, status, and optional optimistic-lock timestamp.",
+        "operationId": "updateStream",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "example": "550e8400-e29b-41d4-a716-446655440000",
+              "format": "uuid",
+              "type": "string",
+            },
+          },
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateStream",
+              },
+            },
+          },
+          "required": true,
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Stream",
+                },
+              },
+            },
+            "description": "The updated stream.",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Bad request.",
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "API key missing, invalid, or revoked.",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Resource not found.",
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Internal server error.",
+          },
+        },
+        "security": [
+          {
+            "apiKeyHeader": [],
+          },
+          {
+            "apiKeyAuthorization": [],
+          },
+        ],
+        "summary": "Update a payment stream",
+        "tags": [
+          "Streams",
+        ],
+      },
+    },
+    "/api/v1/streams/{id}/accrual-preview": {
+      "get": {
+        "operationId": "previewStreamAccrual",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccrualPreview",
+                },
+              },
+            },
+            "description": "Estimated accrued amount.",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Bad request.",
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "API key missing, invalid, or revoked.",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Resource not found.",
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Internal server error.",
+          },
+        },
+        "security": [
+          {
+            "apiKeyHeader": [],
+          },
+          {
+            "apiKeyAuthorization": [],
+          },
+        ],
+        "summary": "Preview accrued stream amount",
+        "tags": [
+          "Streams",
+        ],
+      },
+    },
+    "/api/v1/webhooks": {
+      "get": {
+        "operationId": "listWebhookSubscriptions",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Webhook",
+                  },
+                  "type": "array",
+                },
+              },
+            },
+            "description": "Subscriptions without signing secrets.",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Bad request.",
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "API key missing, invalid, or revoked.",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Resource not found.",
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Internal server error.",
+          },
+        },
+        "security": [
+          {
+            "apiKeyHeader": [],
+          },
+          {
+            "apiKeyAuthorization": [],
+          },
+        ],
+        "summary": "List outbound webhooks",
+        "tags": [
+          "Webhooks",
+        ],
+      },
+      "post": {
+        "operationId": "createWebhookSubscription",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateWebhook",
+              },
+            },
+          },
+          "required": true,
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatedWebhook",
+                },
+              },
+            },
+            "description": "Subscription and one-time signing secret.",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError",
+                },
+              },
+            },
+            "description": "Request validation failed.",
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "API key missing, invalid, or revoked.",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Resource not found.",
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Internal server error.",
+          },
+        },
+        "security": [
+          {
+            "apiKeyHeader": [],
+          },
+          {
+            "apiKeyAuthorization": [],
+          },
+        ],
+        "summary": "Register an outbound webhook",
+        "tags": [
+          "Webhooks",
+        ],
+      },
+    },
+    "/api/v1/webhooks/{id}": {
+      "delete": {
+        "operationId": "deleteWebhookSubscription",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "example": "550e8400-e29b-41d4-a716-446655440000",
+              "format": "uuid",
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "204": {
+            "description": "Subscription deleted.",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Bad request.",
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "API key missing, invalid, or revoked.",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Resource not found.",
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Internal server error.",
+          },
+        },
+        "security": [
+          {
+            "apiKeyHeader": [],
+          },
+          {
+            "apiKeyAuthorization": [],
+          },
+        ],
+        "summary": "Delete an outbound webhook",
+        "tags": [
+          "Webhooks",
+        ],
       },
     },
     "/health": {
       "get": {
-        "description": "Get service health status",
+        "description": "Returns liveness status; use \`deep=1\` to probe the database and configured RPC.",
+        "operationId": "getHealth",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "deep",
+            "required": false,
+            "schema": {
+              "enum": [
+                "1",
+                "true",
+              ],
+              "type": "string",
+            },
+          },
+        ],
         "responses": {
           "200": {
             "content": {
@@ -371,16 +1395,206 @@ exports[`OpenAPI Specification should match the snapshot 1`] = `
                 },
               },
             },
-            "description": "Service is healthy",
+            "description": "Service is healthy.",
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health",
+                },
+              },
+            },
+            "description": "A deep dependency check failed.",
           },
         },
-        "summary": "Health Check",
+        "summary": "Get service health",
+        "tags": [
+          "Health",
+        ],
+      },
+    },
+    "/health/ready": {
+      "get": {
+        "operationId": "getReadiness",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health",
+                },
+              },
+            },
+            "description": "All configured dependencies are healthy.",
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health",
+                },
+              },
+            },
+            "description": "A configured dependency is unhealthy.",
+          },
+        },
+        "summary": "Get dependency readiness",
+        "tags": [
+          "Health",
+        ],
+      },
+    },
+    "/metrics": {
+      "get": {
+        "description": "Returns Prometheus text exposition; production deployments require a bearer token.",
+        "operationId": "getMetrics",
+        "responses": {
+          "200": {
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "description": "RFC 4180 CSV stream of matching payment streams.",
+                  "format": "binary",
+                  "type": "string",
+                },
+              },
+            },
+            "description": "Prometheus metrics.",
+          },
+          "401": {
+            "description": "Bearer token missing or invalid.",
+          },
+        },
+        "summary": "Expose Prometheus metrics",
+        "tags": [
+          "Operations",
+        ],
+      },
+    },
+    "/webhooks/indexer": {
+      "post": {
+        "description": "The signature is calculated over the exact raw JSON bytes and sent as \`x-indexer-signature\`.",
+        "operationId": "ingestIndexerWebhook",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-indexer-signature",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "type": "string",
+            },
+          },
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IndexerWebhook",
+              },
+            },
+          },
+          "required": true,
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IndexerAccepted",
+                },
+              },
+            },
+            "description": "New event accepted.",
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IndexerAccepted",
+                },
+              },
+            },
+            "description": "Duplicate event acknowledged without reprocessing.",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Invalid raw body, JSON, or payload.",
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "API key or signature invalid.",
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Webhook secret is unavailable.",
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error",
+                },
+              },
+            },
+            "description": "Replay-protection storage is unavailable.",
+          },
+        },
+        "security": [
+          {
+            "apiKeyHeader": [],
+          },
+          {
+            "apiKeyAuthorization": [],
+          },
+        ],
+        "summary": "Ingest a signed indexer event",
+        "tags": [
+          "Webhooks",
+        ],
       },
     },
   },
   "servers": [
     {
       "url": "/",
+    },
+  ],
+  "tags": [
+    {
+      "description": "Service liveness and readiness.",
+      "name": "Health",
+    },
+    {
+      "description": "Stream lifecycle and reporting.",
+      "name": "Streams",
+    },
+    {
+      "description": "Outbound subscriptions and signed indexer ingestion.",
+      "name": "Webhooks",
+    },
+    {
+      "description": "Metrics and operational endpoints.",
+      "name": "Operations",
     },
   ],
 }

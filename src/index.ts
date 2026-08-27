@@ -8,8 +8,8 @@ initializeTracing();
 
 import cors from "cors";
 import express, { ErrorRequestHandler, NextFunction, Request, Response } from "express";
-import streamRoutes from "./api/v1/streams";
 import { generateOpenApi } from "./api/v1/openapi";
+import v1Router from "./api/v1/router";
 import { env } from "./config/env";
 import { apiKeyAuthMiddleware } from "./middleware/apiKeyAuth";
 import { webhookRepository } from "./repositories/webhookRepository";
@@ -96,7 +96,7 @@ app.use(
   express.json({ limit: JSON_BODY_LIMIT }),
 );
 
-app.use("/api/v1/streams", streamRoutes);
+app.use("/api/v1", v1Router);
 
 app.use(httpBodyErrorHandler);
 

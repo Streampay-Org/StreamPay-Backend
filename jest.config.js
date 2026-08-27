@@ -14,6 +14,7 @@ module.exports = {
     "<rootDir>/src/services/__tests__/eventIngestionService.test.ts",
     "<rootDir>/src/services/settlementOutboxService.test.ts",
     "<rootDir>/src/services/reconciliationService.test.ts",
+    "<rootDir>/src/api/v1/**/*.test.ts",
     "<rootDir>/src/validation/**/*.test.ts",
   ],
   collectCoverageFrom: [

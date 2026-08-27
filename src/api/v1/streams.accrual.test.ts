@@ -1,7 +1,17 @@
 import request from "supertest";
 import app from "../../index";
 import { StreamRepository } from "../../repositories/streamRepository";
+import { refreshApiKeyStore } from "../../middleware/apiKeyAuth";
 import { accrualService } from "../../services/accrualService";
+
+beforeAll(() => {
+  process.env.API_KEYS = "test-1234";
+  refreshApiKeyStore();
+});
+
+afterAll(() => {
+  delete process.env.API_KEYS;
+});
 
 describe("Stream Accrual Preview API", () => {
   const validId = "123e4567-e89b-12d3-a456-426614174000";
@@ -26,7 +36,7 @@ describe("Stream Accrual Preview API", () => {
       const repoSpy = jest.spyOn(StreamRepository.prototype, "findById").mockResolvedValue(mockStream as never);
       const serviceSpy = jest.spyOn(accrualService, "calculateAccrual").mockReturnValue(mockResult as never);
 
-      const response = await request(app).get(`/api/v1/streams/${validId}/accrual-preview`);
+      const response = await request(app).get(`/api/v1/streams/${validId}/accrual-preview`).set("x-api-key", "test-1234");
 
       expect(response.status).toBe(200);
       expect(response.body).toEqual(expect.objectContaining({
@@ -44,7 +54,7 @@ describe("Stream Accrual Preview API", () => {
     it("should return 404 when stream is not found", async () => {
       const spy = jest.spyOn(StreamRepository.prototype, "findById").mockResolvedValue(null);
 
-      const response = await request(app).get(`/api/v1/streams/${validId}/accrual-preview`);
+      const response = await request(app).get(`/api/v1/streams/${validId}/accrual-preview`).set("x-api-key", "test-1234");
 
       expect(response.status).toBe(404);
       expect(response.body.error).toBe("Stream not found");
@@ -52,7 +62,7 @@ describe("Stream Accrual Preview API", () => {
     });
 
     it("should return 400 when ID is invalid", async () => {
-      const response = await request(app).get("/api/v1/streams/invalid-id/accrual-preview");
+      const response = await request(app).get("/api/v1/streams/invalid-id/accrual-preview").set("x-api-key", "test-1234");
 
       expect(response.status).toBe(400);
       expect(response.body.error).toBe("Invalid stream ID format");
