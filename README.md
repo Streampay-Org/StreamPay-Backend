@@ -254,6 +254,39 @@ npx drizzle-kit push
 npx drizzle-kit generate
 ```
 
+### Metering webhook ordering
+
+Metering webhooks use a positive integer `sequence` at the top level of the
+payload. For `metering`, `metered`, and `usage_recorded` events, StreamPay
+accepts only the next contiguous sequence for that stream. The checkpoint is
+stored separately for each `streamId`, so activity on one stream cannot block
+another stream.
+
+The ordering policy is deliberately explicit:
+
+- a repeated `eventId` is a harmless duplicate;
+- the next sequence advances the stream checkpoint;
+- a future sequence returns `metering_gap` with the expected and received
+  values, without recording the event, so it can be retried after the missing
+  event arrives;
+- an older sequence returns `late_metering_event` and never moves the
+  checkpoint backward;
+- a jump beyond the bounded recovery window is rejected as a gap and cannot
+  create unbounded pending state.
+
+The PostgreSQL implementation serializes decisions with a transaction-scoped
+advisory lock derived from the stream id and enforces a unique
+`(stream_id, sequence)` index. This makes the sequence decision atomic for
+concurrent workers while retaining independent throughput across streams. The
+in-memory implementation is used only in tests and mirrors the same state
+machine. The checkpoint table is durable, so a restarted service retains the
+last accepted sequence and duplicate event identities.
+
+Ordering is applied before downstream metering mutation. A gap is visible to
+the caller and recoverable: deliver the missing sequence, then retry the
+rejected event. A late event must be investigated or replayed only through the
+upstream's canonical sequence; it is never silently applied out of order.
+
 See [docs/data-model.md](docs/data-model.md) for schema documentation and
 [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for the full list of environment
 variables recognized by the service.

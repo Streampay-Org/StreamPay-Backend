@@ -4,6 +4,11 @@ import {
   ProcessedIndexerEventRepository,
   type ProcessedIndexerEventStore,
 } from "../repositories/processedIndexerEventRepository";
+import {
+  InMemoryMeteringCheckpointStore,
+  MeteringCheckpointRepository,
+  type MeteringCheckpointStore,
+} from "../repositories/meteringCheckpointRepository";
 
 export type IndexerEventPayload = {
   eventId: string;
@@ -12,6 +17,7 @@ export type IndexerEventPayload = {
   occurredAt: string;
   chainId?: string;
   transactionHash?: string;
+  sequence?: number;
   data?: Record<string, unknown>;
 };
 
@@ -26,7 +32,9 @@ export type IngestionFailureCode =
   | "invalid_signature"
   | "invalid_json"
   | "invalid_payload"
-  | "idempotency_unavailable";
+  | "idempotency_unavailable"
+  | "metering_gap"
+  | "late_metering_event";
 
 export type IngestionFailureResult = {
   accepted: false;
@@ -39,7 +47,10 @@ export type IngestionResult = IngestionSuccessResult | IngestionFailureResult;
 const SIGNATURE_PREFIX = "sha256=";
 
 export class EventIngestionService {
-  constructor(private readonly processedEvents: ProcessedIndexerEventStore) {}
+  constructor(
+    private readonly processedEvents: ProcessedIndexerEventStore,
+    private readonly meteringCheckpoints: MeteringCheckpointStore = createDefaultMeteringCheckpointStore(),
+  ) {}
 
   async ingest(rawBody: Buffer, signatureHeader: string | undefined): Promise<IngestionResult> {
     const secret = process.env.INDEXER_WEBHOOK_SECRET;
@@ -81,6 +92,48 @@ export class EventIngestionService {
       };
     }
 
+    if (isMeteringEvent(event.eventType)) {
+      if (event.sequence === undefined) {
+        return {
+          accepted: false,
+          code: "invalid_payload",
+          message: "Metering events require a positive integer sequence.",
+        };
+      }
+
+      let checkpoint: Awaited<ReturnType<MeteringCheckpointStore["apply"]>>;
+      try {
+        checkpoint = await this.meteringCheckpoints.apply(event.streamId, event.eventId, event.sequence);
+      } catch {
+        return {
+          accepted: false,
+          code: "idempotency_unavailable",
+          message: "Metering checkpoint storage is unavailable.",
+        };
+      }
+
+      if (checkpoint.kind === "gap" || checkpoint.kind === "gap_too_large") {
+        return {
+          accepted: false,
+          code: "metering_gap",
+          message: `Metering sequence gap: expected ${checkpoint.expectedSequence}, received ${checkpoint.receivedSequence}.`,
+        };
+      }
+      if (checkpoint.kind === "late") {
+        return {
+          accepted: false,
+          code: "late_metering_event",
+          message: `Late metering event rejected at checkpoint ${checkpoint.checkpoint}.`,
+        };
+      }
+
+      return {
+        accepted: true,
+        duplicate: checkpoint.kind === "duplicate",
+        event,
+      };
+    }
+
     let firstDelivery: boolean;
     try {
       firstDelivery = await this.processedEvents.record(event.eventId);
@@ -101,6 +154,7 @@ export class EventIngestionService {
 
   async reset(): Promise<void> {
     await this.processedEvents.reset();
+    await this.meteringCheckpoints.reset();
   }
 
   private isValidSignature(rawBody: Buffer, signatureHeader: string, secret: string): boolean {
@@ -135,8 +189,13 @@ export class EventIngestionService {
       occurredAt: candidate.occurredAt as string,
       chainId: typeof candidate.chainId === "string" ? candidate.chainId : undefined,
       transactionHash: typeof candidate.transactionHash === "string" ? candidate.transactionHash : undefined,
+      sequence: this.parseSequence(candidate.sequence),
       data: this.isRecord(candidate.data) ? candidate.data : undefined,
     };
+  }
+
+  private parseSequence(value: unknown): number | undefined {
+    return typeof value === "number" && Number.isSafeInteger(value) && value >= 1 ? value : undefined;
   }
 
   private isRecord(value: unknown): value is Record<string, unknown> {
@@ -149,6 +208,17 @@ function createDefaultReplayStore(): ProcessedIndexerEventStore {
     return new InMemoryProcessedIndexerEventStore();
   }
   return new ProcessedIndexerEventRepository();
+}
+
+function createDefaultMeteringCheckpointStore(): MeteringCheckpointStore {
+  if (process.env.NODE_ENV === "test") {
+    return new InMemoryMeteringCheckpointStore();
+  }
+  return new MeteringCheckpointRepository();
+}
+
+function isMeteringEvent(eventType: string): boolean {
+  return eventType === "metering" || eventType === "metered" || eventType === "usage_recorded";
 }
 
 export const eventIngestionService = new EventIngestionService(createDefaultReplayStore());

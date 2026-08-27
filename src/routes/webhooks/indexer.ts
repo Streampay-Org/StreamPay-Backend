@@ -30,6 +30,8 @@ router.post(
         invalid_json: 400,
         invalid_payload: 400,
         idempotency_unavailable: 503,
+        metering_gap: 409,
+        late_metering_event: 409,
       } as const;
 
       return res.status(statusByCode[result.code]).json({

@@ -9,6 +9,8 @@ module.exports = {
     "<rootDir>/src/**/__tests__/**/*.test.ts",
     "<rootDir>/src/apiKeyAuth.test.ts",
     "<rootDir>/src/indexerWebhook.test.ts",
+    "<rootDir>/src/repositories/meteringCheckpointRepository.test.ts",
+    "<rootDir>/src/services/__tests__/eventIngestionService.test.ts",
     "<rootDir>/src/validation/**/*.test.ts",
   ],
   collectCoverageFrom: [
