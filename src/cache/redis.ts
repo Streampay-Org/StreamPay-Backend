@@ -1,7 +1,26 @@
 import { createClient, RedisClientType } from "redis";
+import { markRedisAvailable, markRedisUnavailable, recordRedisStateChange } from "../metrics/prometheus";
 
 let client: RedisClientType | null = null;
 let connected = false;
+let failureReported = false;
+
+const reportFailure = (): void => {
+  connected = false;
+  markRedisUnavailable();
+  if (!failureReported) {
+    recordRedisStateChange("failure");
+    failureReported = true;
+  }
+};
+
+const reportRecovery = (): void => {
+  const wasUnavailable = !connected || failureReported;
+  connected = true;
+  markRedisAvailable();
+  if (wasUnavailable && failureReported) recordRedisStateChange("recovery");
+  failureReported = false;
+};
 
 /**
  * Returns the singleton Redis client, or null if unavailable.
@@ -12,7 +31,8 @@ export async function getRedisClient(): Promise<RedisClientType | null> {
 
   const url = process.env.REDIS_URL;
   if (!url) {
-    // No Redis configured — silently skip caching
+    // No Redis configured — optional cache/lease features remain disabled.
+    markRedisUnavailable();
     return null;
   }
 
@@ -20,7 +40,7 @@ export async function getRedisClient(): Promise<RedisClientType | null> {
     const c = createClient({ url }) as RedisClientType;
 
     c.on("error", (err: Error) => {
-      connected = false;
+      reportFailure();
       console.error("[redis] connection error:", err.message);
     });
 
@@ -29,16 +49,17 @@ export async function getRedisClient(): Promise<RedisClientType | null> {
     });
 
     c.on("ready", () => {
-      connected = true;
+      reportRecovery();
     });
 
     await c.connect();
-    connected = true;
+    reportRecovery();
     client = c;
     return client;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("[redis] failed to connect, caching disabled:", msg);
+    reportFailure();
     return null;
   }
 }
@@ -53,6 +74,8 @@ export async function closeRedisClient(): Promise<void> {
     }
     client = null;
     connected = false;
+    failureReported = false;
+    markRedisUnavailable();
   }
 }
 

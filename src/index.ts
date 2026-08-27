@@ -12,6 +12,7 @@ import { generateOpenApi } from "./api/v1/openapi";
 import v1Router from "./api/v1/router";
 import { env } from "./config/env";
 import { apiKeyAuthMiddleware } from "./middleware/apiKeyAuth";
+import { requireRedisForMutation } from "./middleware/redisAvailability";
 import { webhookRepository } from "./repositories/webhookRepository";
 import indexerWebhookRouter from "./routes/webhooks/indexer";
 import { WebhookDeliveryService } from "./services/webhookDeliveryService";
@@ -72,6 +73,8 @@ const PORT = env.PORT;
 app.use(cors());
 app.use(correlationIdMiddleware);
 
+// The indexer router owns API-key authentication and applies the outage guard
+// after authentication, preserving the established unsupported-method 404.
 app.use("/webhooks/indexer", indexerWebhookRouter);
 
 app.get("/health", (_req: Request, res: Response) => {
@@ -92,6 +95,7 @@ app.use(metricsMiddleware);
 app.use(
   "/api/v1",
   apiKeyAuthMiddleware,
+  requireRedisForMutation,
   rejectOversizedJsonPayload,
   express.json({ limit: JSON_BODY_LIMIT }),
 );

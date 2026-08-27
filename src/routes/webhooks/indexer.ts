@@ -1,6 +1,7 @@
 import express, { Request, Response, Router } from "express";
 
 import { apiKeyAuthMiddleware } from "../../middleware/apiKeyAuth";
+import { requireRedisForMutation } from "../../middleware/redisAvailability";
 import { eventIngestionService } from "../../services/eventIngestionService";
 import { indexerEventsTotal } from "../../metrics/prometheus";
 import { logStructured } from "../../telemetry/correlation";
@@ -13,6 +14,7 @@ const rawJsonBodyParser = express.raw({ type: "application/json", limit: INDEXER
 router.post(
   "/",
   apiKeyAuthMiddleware,
+  requireRedisForMutation,
   rawJsonBodyParser,
   async (req: Request<Record<string, never>, unknown, Buffer>, res: Response) => {
     if (!Buffer.isBuffer(req.body)) {

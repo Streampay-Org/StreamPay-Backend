@@ -13,6 +13,7 @@ import { WebhookRepository } from "../repositories/webhookRepository";
 import { WebhookDelivery } from "../db/schema";
 import { recordDependencyOperation } from "../metrics/prometheus";
 import { getCorrelationId, logStructured } from "../telemetry/correlation";
+import { JobLease, RedisJobLease } from "./jobLease";
 
 export const MAX_ATTEMPTS = 5;
 /** Base delay in ms; actual delay = BASE_DELAY_MS * 2^(attempt-1), capped at MAX_DELAY_MS. */
@@ -43,6 +44,8 @@ export class WebhookDeliveryService {
     private readonly repo: WebhookRepository,
     /** Injected fetch — defaults to global fetch (Node 18+). */
     private readonly fetcher: typeof fetch = fetch,
+    private readonly lease: JobLease = new RedisJobLease(),
+    private readonly workerId = `worker-${process.pid}-${Math.random().toString(36).slice(2)}`,
   ) {}
 
   /**
@@ -74,7 +77,21 @@ export class WebhookDeliveryService {
    */
   async processDue(): Promise<void> {
     const due = await this.repo.findDueDeliveries();
-    await Promise.all(due.map((d) => this.attempt(d)));
+    const leased = await Promise.all(
+      due.map(async (delivery) => ({
+        delivery,
+        acquired: await this.lease.acquire(delivery.id, this.workerId),
+      })),
+    );
+    await Promise.all(
+      leased.filter(({ acquired }) => acquired).map(async ({ delivery }) => {
+        try {
+          await this.attempt(delivery);
+        } finally {
+          await this.lease.release(delivery.id, this.workerId);
+        }
+      }),
+    );
   }
 
   /**
