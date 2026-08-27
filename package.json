@@ -31,7 +31,8 @@
     "lint": "eslint src --ext .ts",
     "db:push": "drizzle-kit push",
     "db:generate": "drizzle-kit generate",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "reconcile": "ts-node scripts/reconcile.ts"
   },
   "engines": {
     "node": ">=18"
