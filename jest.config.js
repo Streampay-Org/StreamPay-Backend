@@ -12,6 +12,7 @@ module.exports = {
     "<rootDir>/src/repositories/processedIndexerEventRepository.test.ts",
     "<rootDir>/src/repositories/meteringCheckpointRepository.test.ts",
     "<rootDir>/src/services/__tests__/eventIngestionService.test.ts",
+    "<rootDir>/src/services/settlementOutboxService.test.ts",
     "<rootDir>/src/validation/**/*.test.ts",
   ],
   collectCoverageFrom: [

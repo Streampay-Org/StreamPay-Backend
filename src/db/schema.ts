@@ -7,6 +7,7 @@ import {
   jsonb,
   pgEnum,
   pgTable,
+  uniqueIndex,
   text,
   timestamp,
   uuid,
@@ -14,36 +15,54 @@ import {
   varchar,
 } from "drizzle-orm/pg-core";
 
-export const streamStatusEnum = pgEnum("stream_status", ["active", "paused", "cancelled", "completed"]);
-export const auditActionEnum = pgEnum("audit_action", ["stream_create", "stream_update", "stream_admin_action"]);
+export const streamStatusEnum = pgEnum("stream_status", [
+  "active",
+  "paused",
+  "cancelled",
+  "completed",
+]);
+export const auditActionEnum = pgEnum("audit_action", [
+  "stream_create",
+  "stream_update",
+  "stream_admin_action",
+]);
 
-export const streams = pgTable("streams", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  payer: varchar("payer", { length: 255 }).notNull(),
-  recipient: varchar("recipient", { length: 255 }).notNull(),
-  status: streamStatusEnum("status").notNull().default("active"),
-  ratePerSecond: decimal("rate_per_second", { precision: 20, scale: 9 }).notNull(),
-  startTime: timestamp("start_time").notNull(),
-  endTime: timestamp("end_time"),
-  totalAmount: decimal("total_amount", { precision: 20, scale: 9 }).notNull(),
-  lastSettledAt: timestamp("last_settled_at").notNull().defaultNow(),
-  labels: json("labels").$type<string[]>().default([]),
-  offChainMemo: text("off_chain_memo"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-  deletedAt: timestamp("deleted_at"),
-  chainId: varchar("chain_id", { length: 50 }).notNull().default("stellar-testnet"),
-  contractAddress: varchar("contract_address", { length: 255 }),
-  transactionHash: varchar("transaction_hash", { length: 66 }),
-  metadata: text("metadata"),
-}, (table) => ({
-  payerIdx: index("streams_payer_idx").on(table.payer),
-  recipientIdx: index("streams_recipient_idx").on(table.recipient),
-  statusIdx: index("streams_status_idx").on(table.status),
-  chainIdIdx: index("streams_chain_id_idx").on(table.chainId),
-  createdAtIdx: index("streams_created_at_idx").on(table.createdAt),
-  deletedAtIdx: index("streams_deleted_at_idx").on(table.deletedAt),
-}));
+export const streams = pgTable(
+  "streams",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    payer: varchar("payer", { length: 255 }).notNull(),
+    recipient: varchar("recipient", { length: 255 }).notNull(),
+    status: streamStatusEnum("status").notNull().default("active"),
+    ratePerSecond: decimal("rate_per_second", {
+      precision: 20,
+      scale: 9,
+    }).notNull(),
+    startTime: timestamp("start_time").notNull(),
+    endTime: timestamp("end_time"),
+    totalAmount: decimal("total_amount", { precision: 20, scale: 9 }).notNull(),
+    lastSettledAt: timestamp("last_settled_at").notNull().defaultNow(),
+    labels: json("labels").$type<string[]>().default([]),
+    offChainMemo: text("off_chain_memo"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+    deletedAt: timestamp("deleted_at"),
+    chainId: varchar("chain_id", { length: 50 })
+      .notNull()
+      .default("stellar-testnet"),
+    contractAddress: varchar("contract_address", { length: 255 }),
+    transactionHash: varchar("transaction_hash", { length: 66 }),
+    metadata: text("metadata"),
+  },
+  (table) => ({
+    payerIdx: index("streams_payer_idx").on(table.payer),
+    recipientIdx: index("streams_recipient_idx").on(table.recipient),
+    statusIdx: index("streams_status_idx").on(table.status),
+    chainIdIdx: index("streams_chain_id_idx").on(table.chainId),
+    createdAtIdx: index("streams_created_at_idx").on(table.createdAt),
+    deletedAtIdx: index("streams_deleted_at_idx").on(table.deletedAt),
+  }),
+);
 
 export const auditLogs = pgTable("audit_logs", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -141,3 +160,58 @@ export const meteringEventCheckpoints = pgTable("metering_event_checkpoints", {
 
 export type MeteringEventCheckpoint = typeof meteringEventCheckpoints.$inferSelect;
 export type NewMeteringEventCheckpoint = typeof meteringEventCheckpoints.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// Settlement transactional outbox
+// ---------------------------------------------------------------------------
+
+/** Lifecycle states are deliberately explicit so operators can distinguish a retry from a poison event. */
+export const settlementOutboxStatusEnum = pgEnum("settlement_outbox_status", [
+  "pending",
+  "processing",
+  "succeeded",
+  "failed",
+  "dead",
+]);
+
+/**
+ * Durable hand-off between a settlement database transaction and asynchronous side effects.
+ * `eventKey` is the application idempotency key: one settlement state transition can enqueue
+ * one logical event even if its caller is retried after a network timeout.
+ */
+export const settlementOutbox = pgTable(
+  "settlement_outbox",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    eventKey: varchar("event_key", { length: 255 }).notNull(),
+    eventType: varchar("event_type", { length: 100 }).notNull(),
+    aggregateId: varchar("aggregate_id", { length: 255 }).notNull(),
+    payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
+    status: settlementOutboxStatusEnum("status").notNull().default("pending"),
+    attempts: integer("attempts").notNull().default(0),
+    maxAttempts: integer("max_attempts").notNull().default(8),
+    availableAt: timestamp("available_at").defaultNow().notNull(),
+    leaseUntil: timestamp("lease_until"),
+    leaseToken: varchar("lease_token", { length: 100 }),
+    lastError: text("last_error"),
+    processedAt: timestamp("processed_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    eventKeyUnique: uniqueIndex("settlement_outbox_event_key_unique").on(
+      table.eventKey,
+    ),
+    dueIdx: index("settlement_outbox_due_idx").on(
+      table.status,
+      table.availableAt,
+    ),
+    aggregateIdx: index("settlement_outbox_aggregate_idx").on(
+      table.aggregateId,
+      table.createdAt,
+    ),
+  }),
+);
+
+export type SettlementOutbox = typeof settlementOutbox.$inferSelect;
+export type NewSettlementOutbox = typeof settlementOutbox.$inferInsert;
