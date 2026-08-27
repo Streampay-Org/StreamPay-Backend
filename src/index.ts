@@ -12,6 +12,7 @@ import streamRoutes from "./api/v1/streams";
 import { generateOpenApi } from "./api/v1/openapi";
 import { env } from "./config/env";
 import { apiKeyAuthMiddleware } from "./middleware/apiKeyAuth";
+import { requireRedisForMutation } from "./middleware/redisAvailability";
 import { webhookRepository } from "./repositories/webhookRepository";
 import indexerWebhookRouter from "./routes/webhooks/indexer";
 import { WebhookDeliveryService } from "./services/webhookDeliveryService";
@@ -69,6 +70,8 @@ const PORT = env.PORT;
 
 app.use(cors());
 
+// The indexer router owns API-key authentication and applies the outage guard
+// after authentication, preserving the established unsupported-method 404.
 app.use("/webhooks/indexer", indexerWebhookRouter);
 
 app.get("/health", (_req: Request, res: Response) => {
@@ -86,6 +89,7 @@ app.get("/api/openapi.json", (_req: Request, res: Response) => {
 app.use(
   "/api/v1",
   apiKeyAuthMiddleware,
+  requireRedisForMutation,
   rejectOversizedJsonPayload,
   express.json({ limit: JSON_BODY_LIMIT }),
 );

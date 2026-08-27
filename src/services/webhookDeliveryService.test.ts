@@ -12,6 +12,7 @@ import {
   BASE_DELAY_MS,
   MAX_DELAY_MS,
 } from "./webhookDeliveryService";
+import { InMemoryJobLease } from "./jobLease";
 import { WebhookRepository } from "../repositories/webhookRepository";
 import { WebhookDelivery, WebhookSubscription } from "../db/schema";
 
@@ -148,7 +149,7 @@ describe("WebhookDeliveryService.attempt — success", () => {
     repo.updateDelivery.mockResolvedValue({ ...delivery, status: "success" });
 
     const mockFetch = jest.fn().mockResolvedValue({ ok: true, status: 200 });
-    const svc = new WebhookDeliveryService(repo, mockFetch as unknown as typeof fetch);
+    const svc = new WebhookDeliveryService(repo, mockFetch as unknown as typeof fetch, new InMemoryJobLease());
 
     await svc.attempt(delivery);
 
@@ -168,7 +169,7 @@ describe("WebhookDeliveryService.attempt — success", () => {
     repo.updateDelivery.mockResolvedValue(makeDelivery());
 
     const mockFetch = jest.fn().mockResolvedValue({ ok: true, status: 200 });
-    const svc = new WebhookDeliveryService(repo, mockFetch as unknown as typeof fetch);
+    const svc = new WebhookDeliveryService(repo, mockFetch as unknown as typeof fetch, new InMemoryJobLease());
 
     await svc.attempt(makeDelivery({ eventType: "settled" }));
 
@@ -277,10 +278,56 @@ describe("WebhookDeliveryService.processDue", () => {
     repo.findDueDeliveries.mockResolvedValue([]);
 
     const mockFetch = jest.fn();
-    const svc = new WebhookDeliveryService(repo, mockFetch as unknown as typeof fetch);
+    const svc = new WebhookDeliveryService(repo, mockFetch as unknown as typeof fetch, new InMemoryJobLease());
 
     await svc.processDue();
 
     expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it("does not claim or send due work when the lease backend is unavailable", async () => {
+    const repo = mockRepo();
+    repo.findDueDeliveries.mockResolvedValue([makeDelivery({ id: "outage-1" })]);
+    const mockFetch = jest.fn();
+    const svc = new WebhookDeliveryService(repo, mockFetch as unknown as typeof fetch, new InMemoryJobLease(false));
+
+    await svc.processDue();
+
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(repo.findSubscriptionById).not.toHaveBeenCalled();
+  });
+
+  it("prevents duplicate processing when two workers see the same row", async () => {
+    const repo = mockRepo();
+    const delivery = makeDelivery({ id: "shared-1" });
+    repo.findDueDeliveries.mockResolvedValue([delivery]);
+    repo.findSubscriptionById.mockResolvedValue(makeSub());
+    repo.updateDelivery.mockResolvedValue(makeDelivery());
+    const lease = new InMemoryJobLease();
+    const mockFetch = jest.fn().mockResolvedValue({ ok: true, status: 200 });
+    const first = new WebhookDeliveryService(repo, mockFetch as unknown as typeof fetch, lease, "worker-a");
+    const second = new WebhookDeliveryService(repo, mockFetch as unknown as typeof fetch, lease, "worker-b");
+
+    await Promise.all([first.processDue(), second.processDue()]);
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(repo.updateDelivery).toHaveBeenCalledTimes(1);
+  });
+
+  it("releases a lease after an attempt so a later poll can retry", async () => {
+    const repo = mockRepo();
+    const delivery = makeDelivery({ id: "retry-1" });
+    repo.findDueDeliveries.mockResolvedValue([delivery]);
+    repo.findSubscriptionById.mockResolvedValue(makeSub());
+    repo.updateDelivery.mockResolvedValue(makeDelivery());
+    const lease = new InMemoryJobLease();
+    const mockFetch = jest.fn().mockResolvedValue({ ok: true, status: 200 });
+    const svc = new WebhookDeliveryService(repo, mockFetch as unknown as typeof fetch, lease, "worker-a");
+
+    await svc.processDue();
+    await svc.processDue();
+
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(lease.has(delivery.id)).toBe(false);
   });
 });

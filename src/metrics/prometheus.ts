@@ -26,6 +26,46 @@ export const syncLagGauge = new client.Gauge({
 
 register.registerMetric(syncLagGauge);
 
+/** 1 while the optional Redis dependency is healthy, 0 during an outage. */
+export const redisAvailabilityGauge = new client.Gauge({
+  name: "redis_availability",
+  help: "Whether Redis is available to the backend (1=available, 0=unavailable).",
+  labelNames: ["component"],
+});
+
+/** Counts Redis failures by component and outcome for alerting and recovery analysis. */
+export const redisStateChangesTotal = new client.Counter({
+  name: "redis_state_changes_total",
+  help: "Redis availability failures and recoveries observed by backend components.",
+  labelNames: ["component", "state"],
+});
+
+/** Counts worker lease decisions; skipped jobs are visible without exposing payloads. */
+export const jobLeaseDecisionsTotal = new client.Counter({
+  name: "job_lease_decisions_total",
+  help: "Background job lease acquisition outcomes.",
+  labelNames: ["result"],
+});
+
+redisAvailabilityGauge.labels("shared").set(0);
+register.registerMetric(redisAvailabilityGauge);
+register.registerMetric(redisStateChangesTotal);
+register.registerMetric(jobLeaseDecisionsTotal);
+
+export const markRedisAvailable = (component = "shared"): void => {
+  redisAvailabilityGauge.labels(component).set(1);
+};
+
+export const markRedisUnavailable = (component = "shared"): void => {
+  redisAvailabilityGauge.labels(component).set(0);
+};
+
+export const recordRedisStateChange = (state: "failure" | "recovery", component = "shared"): void => {
+  redisStateChangesTotal.labels(component, state).inc();
+  if (state === "recovery") markRedisAvailable(component);
+  else markRedisUnavailable(component);
+};
+
 /**
  * Middleware to track HTTP request duration and error rates.
  */
