@@ -96,9 +96,12 @@ npx drizzle-kit generate
 
 The `streams` table supports a soft-delete pattern via a nullable
 `deleted_at` timestamp. Repository methods filter rows where
-`deleted_at IS NULL` by default; pass `includeDeleted: true` for admin
-inspection paths. Hard deletes are reserved for retention sweeps and are
-not exposed via the HTTP API.
+`deleted_at IS NULL` by default; pass `includeDeleted: true` for authorized
+historical inspection paths. A deleted stream cannot be patched or deleted
+again, and `POST /api/v1/streams/:id/restore` is the only explicit restore
+path. Restoration clears only `deleted_at` and preserves the stream's
+lifecycle status. Hard deletes are reserved for retention sweeps and are not
+exposed via the HTTP API.
 
 ## Audit Log
 

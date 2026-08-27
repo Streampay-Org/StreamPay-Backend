@@ -116,6 +116,9 @@ export class StreamRepository {
     };
 
     const conditions: SQL[] = [eq(streams.id, id)];
+    // A deleted stream is immutable. This prevents PATCH from turning a
+    // historical record back into an active mutation path accidentally.
+    conditions.push(sql`${streams.deletedAt} IS NULL`);
     if (currentUpdatedAt) {
       conditions.push(eq(streams.updatedAt, currentUpdatedAt));
     }
@@ -133,7 +136,18 @@ export class StreamRepository {
     const result = await db
       .update(streams)
       .set({ deletedAt: new Date() })
-      .where(eq(streams.id, id));
+      .where(and(eq(streams.id, id), sql`${streams.deletedAt} IS NULL`));
+
+    const affected = typeof result === "number" ? result : (result?.rowCount ?? 0);
+    return affected > 0;
+  }
+
+  /** Restore a deleted stream without changing its lifecycle status. */
+  async restoreById(id: string): Promise<boolean> {
+    const result = await db
+      .update(streams)
+      .set({ deletedAt: null, updatedAt: new Date() })
+      .where(and(eq(streams.id, id), sql`${streams.deletedAt} IS NOT NULL`));
 
     const affected = typeof result === "number" ? result : (result?.rowCount ?? 0);
     return affected > 0;
