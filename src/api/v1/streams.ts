@@ -309,6 +309,27 @@ router.patch("/:id", async (req: Request, res: Response) => {
   }
 });
 
+// POST /api/v1/streams/:id/restore
+// Restoration is explicit and preserves the stream's lifecycle status.
+router.post(
+  "/:id/restore",
+  validate({ params: uuidParamSchema }),
+  async (req: Request, res: Response) => {
+    try {
+      const restored = await streamRepository.restoreById(req.params.id);
+      if (!restored) {
+        return res.status(404).json({ error: "Deleted stream not found" });
+      }
+
+      const stream = await streamRepository.findById(req.params.id);
+      return res.json(stream);
+    } catch (error) {
+      console.error("Error restoring stream:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  },
+);
+
 // DELETE /api/v1/streams/:id
 router.delete(
   "/:id",
@@ -349,4 +370,3 @@ router.get(
 );
 
 export default router;
-

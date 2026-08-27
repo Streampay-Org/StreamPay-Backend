@@ -96,6 +96,32 @@ describe("Stream API Routes", () => {
       expect(response.body.error).toBe("Stream not found");
       spy.mockRestore();
     });
+
+    it("restores a deleted stream explicitly", async () => {
+      const restoreSpy = jest.spyOn(StreamRepository.prototype, "restoreById").mockResolvedValue(true);
+      const findSpy = jest.spyOn(StreamRepository.prototype, "findById").mockResolvedValue({ id: validId } as never);
+
+      const response = await request(app)
+        .post(`/api/v1/streams/${validId}/restore`)
+        .set("x-api-key", "test-1234");
+
+      expect(response.status).toBe(200);
+      expect(restoreSpy).toHaveBeenCalledWith(validId);
+      expect(findSpy).toHaveBeenCalledWith(validId);
+      restoreSpy.mockRestore();
+      findSpy.mockRestore();
+    });
+
+    it("does not expose restore for an active or unknown stream", async () => {
+      const restoreSpy = jest.spyOn(StreamRepository.prototype, "restoreById").mockResolvedValue(false);
+
+      const response = await request(app)
+        .post(`/api/v1/streams/${validId}/restore`)
+        .set("x-api-key", "test-1234");
+
+      expect(response.status).toBe(404);
+      restoreSpy.mockRestore();
+    });
   });
 
   describe("POST /api/v1/streams", () => {

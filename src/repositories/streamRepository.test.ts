@@ -108,6 +108,28 @@ describe("StreamRepository", () => {
       expect(updateBuilder.set).toHaveBeenCalledWith({ deletedAt: expect.any(Date) });
       expect(updateBuilder.where).toHaveBeenCalled();
     });
+
+    it("should restore only a deleted stream", async () => {
+      const updateBuilder = {
+        set: jest.fn().mockReturnThis(),
+        where: jest.fn().mockResolvedValue({ rowCount: 1 }),
+      };
+      (db.update as jest.Mock).mockReturnValue(updateBuilder);
+
+      await expect(repository.restoreById("deleted-id")).resolves.toBe(true);
+      expect(updateBuilder.set).toHaveBeenCalledWith({ deletedAt: null, updatedAt: expect.any(Date) });
+      expect(updateBuilder.where).toHaveBeenCalled();
+    });
+
+    it("reports false when restoring an active or unknown stream", async () => {
+      const updateBuilder = {
+        set: jest.fn().mockReturnThis(),
+        where: jest.fn().mockResolvedValue({ rowCount: 0 }),
+      };
+      (db.update as jest.Mock).mockReturnValue(updateBuilder);
+
+      await expect(repository.restoreById("active-id")).resolves.toBe(false);
+    });
   });
 
   describe("findAll", () => {
