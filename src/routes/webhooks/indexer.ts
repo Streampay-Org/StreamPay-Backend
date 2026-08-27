@@ -30,6 +30,8 @@ router.post(
         invalid_json: 400,
         invalid_payload: 400,
         idempotency_unavailable: 503,
+        idempotency_conflict: 409,
+        settlement_in_progress: 409,
       } as const;
 
       return res.status(statusByCode[result.code]).json({

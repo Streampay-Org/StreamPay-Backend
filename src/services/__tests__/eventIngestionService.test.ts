@@ -1,7 +1,10 @@
 import crypto from "crypto";
 
 import { EventIngestionService } from "../eventIngestionService";
-import type { ProcessedIndexerEventStore } from "../../repositories/processedIndexerEventRepository";
+import type {
+  ProcessedIndexerEventClaim,
+  ProcessedIndexerEventStore,
+} from "../../repositories/processedIndexerEventRepository";
 
 const secret = "test-indexer-secret";
 
@@ -13,24 +16,39 @@ const payload = {
 };
 
 class FakeProcessedIndexerEventStore implements ProcessedIndexerEventStore {
-  readonly eventIds = new Set<string>();
+  readonly events = new Map<string, { fingerprint: string; status: "processing" | "completed" | "failed" }>();
   readonly calls: string[] = [];
   failRecord = false;
 
-  async record(eventId: string): Promise<boolean> {
+  async claim(eventId: string, fingerprint: string): Promise<ProcessedIndexerEventClaim> {
     this.calls.push(eventId);
     if (this.failRecord) {
       throw new Error("database unavailable");
     }
-    if (this.eventIds.has(eventId)) {
-      return false;
+    const existing = this.events.get(eventId);
+    if (!existing) {
+      this.events.set(eventId, { fingerprint, status: "processing" });
+      return { kind: "claimed" };
     }
-    this.eventIds.add(eventId);
-    return true;
+    if (existing.fingerprint !== fingerprint) return { kind: "conflict" };
+    if (existing.status === "completed") return { kind: "duplicate" };
+    if (existing.status === "processing") return { kind: "in_progress" };
+    existing.status = "processing";
+    return { kind: "claimed" };
+  }
+
+  async complete(eventId: string): Promise<void> {
+    const event = this.events.get(eventId);
+    if (event) event.status = "completed";
+  }
+
+  async fail(eventId: string): Promise<void> {
+    const event = this.events.get(eventId);
+    if (event) event.status = "failed";
   }
 
   async reset(): Promise<void> {
-    this.eventIds.clear();
+    this.events.clear();
     this.calls.length = 0;
   }
 }
@@ -89,5 +107,85 @@ describe("EventIngestionService", () => {
       code: "idempotency_unavailable",
       message: "Webhook replay protection is unavailable.",
     });
+  });
+
+  it("rejects a reused event id when the complete payload conflicts", async () => {
+    const store = new FakeProcessedIndexerEventStore();
+    const service = new EventIngestionService(store);
+    const firstBody = Buffer.from(JSON.stringify(payload));
+    const conflictingBody = Buffer.from(JSON.stringify({ ...payload, streamId: "stream_other" }));
+
+    const first = await service.ingest(firstBody, sign(firstBody.toString("utf8")));
+    const conflict = await service.ingest(conflictingBody, sign(conflictingBody.toString("utf8")));
+
+    expect(first).toMatchObject({ accepted: true, duplicate: false });
+    expect(conflict).toEqual({
+      accepted: false,
+      code: "idempotency_conflict",
+      message: "The event id is already bound to a different payload.",
+    });
+    expect(store.events.get(payload.eventId)?.status).toBe("completed");
+  });
+
+  it("reports an active claim instead of allowing a concurrent settlement", async () => {
+    const store = new FakeProcessedIndexerEventStore();
+    const service = new EventIngestionService(store);
+    const body = Buffer.from(JSON.stringify(payload));
+
+    const first = await service.ingest(body, sign(body.toString("utf8")));
+    const event = store.events.get(payload.eventId);
+    expect(first).toMatchObject({ accepted: true, duplicate: false });
+    expect(event).toBeDefined();
+    if (!event) throw new Error("expected the first settlement claim");
+    event.status = "processing";
+
+    const concurrent = await service.ingest(body, sign(body.toString("utf8")));
+    expect(concurrent).toEqual({
+      accepted: false,
+      code: "settlement_in_progress",
+      message: "Settlement for this event is already being processed.",
+    });
+  });
+
+  it("allows a failed claim to retry exactly once", async () => {
+    const store = new FakeProcessedIndexerEventStore();
+    const service = new EventIngestionService(store);
+    const body = Buffer.from(JSON.stringify(payload));
+    const signature = sign(body.toString("utf8"));
+
+    const initial = await service.ingest(body, signature);
+    const event = store.events.get(payload.eventId);
+    expect(initial).toMatchObject({ accepted: true, duplicate: false });
+    expect(event).toBeDefined();
+    if (!event) throw new Error("expected the first settlement claim");
+    event.status = "failed";
+
+    const retry = await service.ingest(body, signature);
+    const replay = await service.ingest(body, signature);
+    expect(retry).toMatchObject({ accepted: true, duplicate: false });
+    expect(replay).toMatchObject({ accepted: true, duplicate: true });
+    expect(event.status).toBe("completed");
+  });
+
+  it("fingerprints semantically equivalent JSON independent of property order", async () => {
+    const store = new FakeProcessedIndexerEventStore();
+    const service = new EventIngestionService(store);
+    const firstBody = Buffer.from(JSON.stringify({
+      eventId: payload.eventId,
+      eventType: payload.eventType,
+      streamId: payload.streamId,
+      occurredAt: payload.occurredAt,
+    }));
+    const replayBody = Buffer.from(JSON.stringify({
+      occurredAt: payload.occurredAt,
+      streamId: payload.streamId,
+      eventType: payload.eventType,
+      eventId: payload.eventId,
+    }));
+
+    const first = await service.ingest(firstBody, sign(firstBody.toString("utf8")));
+    const replay = await service.ingest(replayBody, sign(replayBody.toString("utf8")));
+    expect(first).toMatchObject({ accepted: true, duplicate: false });
+    expect(replay).toMatchObject({ accepted: true, duplicate: true });
   });
 });
