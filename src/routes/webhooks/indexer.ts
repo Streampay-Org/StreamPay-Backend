@@ -2,6 +2,8 @@ import express, { Request, Response, Router } from "express";
 
 import { apiKeyAuthMiddleware } from "../../middleware/apiKeyAuth";
 import { eventIngestionService } from "../../services/eventIngestionService";
+import { indexerEventsTotal } from "../../metrics/prometheus";
+import { logStructured } from "../../telemetry/correlation";
 
 export const INDEXER_WEBHOOK_BODY_LIMIT = "100kb";
 
@@ -21,7 +23,7 @@ router.post(
     }
 
     const signatureHeader = req.header("x-indexer-signature") ?? undefined;
-    const result = await eventIngestionService.ingest(req.body, signatureHeader);
+    const result = await eventIngestionService.ingest(req.body, signatureHeader, req.correlationId);
 
     if (!result.accepted) {
       const statusByCode = {
@@ -32,12 +34,25 @@ router.post(
         idempotency_unavailable: 503,
       } as const;
 
+      indexerEventsTotal.labels("unknown", result.code).inc();
+      logStructured("warn", "indexer_event_rejected", {
+        correlationId: req.correlationId,
+        outcome: result.code,
+      });
       return res.status(statusByCode[result.code]).json({
         error: result.code,
         message: result.message,
       });
     }
 
+    indexerEventsTotal.labels(result.event.eventType, result.duplicate ? "duplicate" : "accepted").inc();
+    logStructured("info", "indexer_event_ingested", {
+      correlationId: req.correlationId,
+      eventId: result.event.eventId,
+      eventType: result.event.eventType,
+      streamId: result.event.streamId,
+      outcome: result.duplicate ? "duplicate" : "accepted",
+    });
     return res.status(result.duplicate ? 202 : 200).json({
       accepted: true,
       duplicate: result.duplicate,

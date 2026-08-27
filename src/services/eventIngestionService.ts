@@ -13,6 +13,7 @@ export type IndexerEventPayload = {
   chainId?: string;
   transactionHash?: string;
   data?: Record<string, unknown>;
+  correlationId?: string;
 };
 
 export type IngestionSuccessResult = {
@@ -41,7 +42,7 @@ const SIGNATURE_PREFIX = "sha256=";
 export class EventIngestionService {
   constructor(private readonly processedEvents: ProcessedIndexerEventStore) {}
 
-  async ingest(rawBody: Buffer, signatureHeader: string | undefined): Promise<IngestionResult> {
+  async ingest(rawBody: Buffer, signatureHeader: string | undefined, correlationId?: string): Promise<IngestionResult> {
     const secret = process.env.INDEXER_WEBHOOK_SECRET;
 
     if (!secret) {
@@ -95,7 +96,7 @@ export class EventIngestionService {
     return {
       accepted: true,
       duplicate: !firstDelivery,
-      event,
+      event: { ...event, correlationId },
     };
   }
 
