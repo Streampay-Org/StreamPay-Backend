@@ -41,6 +41,7 @@ startup. Defaults shown are applied when the variable is unset.
 | `RATE_LIMIT_MAX` | `100` | Global max requests per window. |
 | `RATE_LIMIT_AUTH_WINDOW_MS` | `900000` | Auth window in ms. |
 | `RATE_LIMIT_AUTH_MAX` | `20` | Auth max requests per window. |
+| `RATE_LIMIT_ROUTE_BUDGETS` | unset | JSON route budgets, e.g. `{\"/streams/export.csv\":{\"windowMs\":60000,\"max\":10}}`. Requests also consume the tenant budget. |
 
 ## Authentication
 

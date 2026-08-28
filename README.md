@@ -159,7 +159,13 @@ RATE_LIMIT_WINDOW_MS=60000       # Global window in ms (default: 60 s)
 RATE_LIMIT_MAX=100               # Global max requests per window (default: 100)
 RATE_LIMIT_AUTH_WINDOW_MS=900000 # Auth window in ms (default: 15 min)
 RATE_LIMIT_AUTH_MAX=20           # Auth max requests per window (default: 20)
+RATE_LIMIT_ROUTE_BUDGETS='{"/streams/export.csv":{"windowMs":60000,"max":10}}'
 ```
+
+Each API request consumes an isolated tenant budget and a route budget. The
+effective capacity is returned in `RateLimit` and `X-RateLimit-*` headers;
+blocked requests also receive `Retry-After`. Tenant/route overrides must be
+applied through the audited `setRateLimitOverride` service API.
 
 > Security note: If the service runs behind a reverse proxy (nginx, AWS ALB, etc.) set `app.set('trust proxy', 1)` so that `req.ip` reflects the real client IP rather than the proxy address.
 

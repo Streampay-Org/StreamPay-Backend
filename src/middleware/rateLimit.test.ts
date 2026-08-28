@@ -7,7 +7,12 @@
 
 import request from "supertest";
 import express, { Request, Response } from "express";
-import { createGlobalRateLimiter, createAuthRateLimiter } from "./rateLimit";
+import {
+  createGlobalRateLimiter,
+  createAuthRateLimiter,
+  setRateLimitOverride,
+  clearRateLimitOverrides,
+} from "./rateLimit";
 
 /** Build a minimal Express app with the given limiter applied. */
 const buildApp = (limiter: ReturnType<typeof createGlobalRateLimiter>) => {
@@ -25,6 +30,7 @@ describe("Rate Limiting Middleware", () => {
 
   afterAll(() => {
     delete process.env.RATE_LIMIT_ENABLED;
+    clearRateLimitOverrides();
   });
 
   describe("createGlobalRateLimiter", () => {
@@ -87,6 +93,53 @@ describe("Rate Limiting Middleware", () => {
       const res = await request(app).get("/test").set("x-api-key", "key-gamma");
 
       expect(res.status).toBe(429);
+    });
+
+    it("isolates tenant budgets and applies the stricter route budget", async () => {
+      const app = express();
+      app.use((req, _res, next) => {
+        req.apiKey = { id: req.header("x-tenant") ?? "unknown" };
+        next();
+      });
+      app.use(createGlobalRateLimiter({
+        windowMs: 5_000,
+        max: 2,
+        routeBudgets: { "/expensive": { windowMs: 5_000, max: 1 } },
+      }));
+      app.get("/expensive", (_req, res) => res.sendStatus(200));
+
+      const first = await request(app).get("/expensive").set("x-tenant", "tenant-a");
+      const secondTenant = await request(app).get("/expensive").set("x-tenant", "tenant-b");
+      const exhaustedRoute = await request(app).get("/expensive").set("x-tenant", "tenant-a");
+
+      expect(first.status).toBe(200);
+      expect(secondTenant.status).toBe(200);
+      expect(exhaustedRoute.status).toBe(429);
+      expect(first.headers["x-ratelimit-limit"]).toBe("1");
+      expect(first.headers["x-ratelimit-remaining"]).toBe("0");
+    });
+
+    it("audits administrator overrides before applying them", async () => {
+      const audit = jest.fn();
+      await setRateLimitOverride({
+        tenantId: "tenant-override",
+        route: "/test",
+        windowMs: 5_000,
+        max: 2,
+        actor: "admin-1",
+        reason: "incident mitigation",
+      }, audit);
+      expect(audit).toHaveBeenCalledWith(expect.objectContaining({ actor: "admin-1" }));
+
+      const app = express();
+      app.use((req, _res, next) => {
+        req.apiKey = { id: "tenant-override" };
+        next();
+      });
+      app.use(createGlobalRateLimiter({ windowMs: 5_000, max: 1 }));
+      app.get("/test", (_req, res) => res.sendStatus(200));
+      expect((await request(app).get("/test")).status).toBe(200);
+      expect((await request(app).get("/test")).status).toBe(200);
     });
   });
 

@@ -13,6 +13,7 @@ import v1Router from "./api/v1/router";
 import { env } from "./config/env";
 import { apiKeyAuthMiddleware } from "./middleware/apiKeyAuth";
 import { requireRedisForMutation } from "./middleware/redisAvailability";
+import { globalRateLimiter } from "./middleware/rateLimit";
 import { webhookRepository } from "./repositories/webhookRepository";
 import indexerWebhookRouter from "./routes/webhooks/indexer";
 import { WebhookDeliveryService } from "./services/webhookDeliveryService";
@@ -96,6 +97,7 @@ app.use(
   "/api/v1",
   apiKeyAuthMiddleware,
   requireRedisForMutation,
+  globalRateLimiter,
   rejectOversizedJsonPayload,
   express.json({ limit: JSON_BODY_LIMIT }),
 );
