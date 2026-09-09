@@ -21,6 +21,8 @@ export interface FindAllParams {
   offset?: number;
   /** When true, include soft-deleted rows (admin / inspection only). */
   includeDeleted?: boolean;
+  /** Restrict to streams belonging to this tenant. */
+  tenantId?: string;
 }
 
 /**
@@ -44,6 +46,8 @@ export interface ExportParams {
   cursorId?: string;
   /** Number of rows per DB fetch (default 500). */
   batchSize?: number;
+  /** Restrict to streams belonging to this tenant. */
+  tenantId?: string;
 }
 
 export interface ExportBatch {
@@ -53,9 +57,14 @@ export interface ExportBatch {
 }
 
 export class StreamRepository {
-  async findById(id: string, includeDeleted = false): Promise<(Stream & { accruedEstimate: string }) | null> {
+  async findById(
+    id: string,
+    includeDeleted = false,
+    tenantId?: string,
+  ): Promise<(Stream & { accruedEstimate: string }) | null> {
     const conditions: SQL[] = [eq(streams.id, id)];
     if (!includeDeleted) conditions.push(sql`${streams.deletedAt} IS NULL`);
+    if (tenantId) conditions.push(eq(streams.tenantId, tenantId));
 
     const [result] = await db
       .select()
@@ -81,6 +90,7 @@ export class StreamRepository {
     if (params.payer) conditions.push(eq(streams.payer, params.payer));
     if (params.recipient) conditions.push(eq(streams.recipient, params.recipient));
     if (params.status) conditions.push(eq(streams.status, params.status));
+    if (params.tenantId) conditions.push(eq(streams.tenantId, params.tenantId));
 
     if (!params.includeDeleted) {
       conditions.push(sql`${streams.deletedAt} IS NULL`);
@@ -109,7 +119,12 @@ export class StreamRepository {
     };
   }
 
-  async updateById(id: string, updates: UpdateStreamParams, currentUpdatedAt?: Date): Promise<Stream | null> {
+  async updateById(
+    id: string,
+    updates: UpdateStreamParams,
+    currentUpdatedAt?: Date,
+    tenantId?: string,
+  ): Promise<Stream | null> {
     const updateData: Partial<Stream> = {
       ...updates,
       updatedAt: new Date(),
@@ -122,6 +137,9 @@ export class StreamRepository {
     if (currentUpdatedAt) {
       conditions.push(eq(streams.updatedAt, currentUpdatedAt));
     }
+    if (tenantId) {
+      conditions.push(eq(streams.tenantId, tenantId));
+    }
 
     const result = await db
       .update(streams)
@@ -132,22 +150,28 @@ export class StreamRepository {
     return result[0] ?? null;
   }
 
-  async softDeleteById(id: string): Promise<boolean> {
+  async softDeleteById(id: string, tenantId?: string): Promise<boolean> {
+    const conditions: SQL[] = [eq(streams.id, id), sql`${streams.deletedAt} IS NULL`];
+    if (tenantId) conditions.push(eq(streams.tenantId, tenantId));
+
     const result = await db
       .update(streams)
       .set({ deletedAt: new Date() })
-      .where(and(eq(streams.id, id), sql`${streams.deletedAt} IS NULL`));
+      .where(and(...conditions));
 
     const affected = typeof result === "number" ? result : (result?.rowCount ?? 0);
     return affected > 0;
   }
 
   /** Restore a deleted stream without changing its lifecycle status. */
-  async restoreById(id: string): Promise<boolean> {
+  async restoreById(id: string, tenantId?: string): Promise<boolean> {
+    const conditions: SQL[] = [eq(streams.id, id), sql`${streams.deletedAt} IS NOT NULL`];
+    if (tenantId) conditions.push(eq(streams.tenantId, tenantId));
+
     const result = await db
       .update(streams)
       .set({ deletedAt: null, updatedAt: new Date() })
-      .where(and(eq(streams.id, id), sql`${streams.deletedAt} IS NOT NULL`));
+      .where(and(...conditions));
 
     const affected = typeof result === "number" ? result : (result?.rowCount ?? 0);
     return affected > 0;
@@ -165,6 +189,9 @@ export class StreamRepository {
     }
     if (params.status) {
       conditions.push(eq(streams.status, params.status));
+    }
+    if (params.tenantId) {
+      conditions.push(eq(streams.tenantId, params.tenantId));
     }
 
     // Exclude soft-deleted rows by default

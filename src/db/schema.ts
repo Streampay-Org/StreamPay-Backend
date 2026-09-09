@@ -11,7 +11,6 @@ import {
   text,
   timestamp,
   uuid,
-  uniqueIndex,
   varchar,
 } from "drizzle-orm/pg-core";
 
@@ -31,6 +30,7 @@ export const streams = pgTable(
   "streams",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: varchar("tenant_id", { length: 255 }),
     payer: varchar("payer", { length: 255 }).notNull(),
     recipient: varchar("recipient", { length: 255 }).notNull(),
     status: streamStatusEnum("status").notNull().default("active"),
@@ -55,6 +55,7 @@ export const streams = pgTable(
     metadata: text("metadata"),
   },
   (table) => ({
+    tenantIdIdx: index("streams_tenant_id_idx").on(table.tenantId),
     payerIdx: index("streams_payer_idx").on(table.payer),
     recipientIdx: index("streams_recipient_idx").on(table.recipient),
     statusIdx: index("streams_status_idx").on(table.status),

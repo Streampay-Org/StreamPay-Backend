@@ -1,36 +1,38 @@
 import crypto from "crypto";
-import { NextFunction, Request, Response, Router } from "express";
+import { Router, Request, Response, NextFunction } from "express";
 import { z } from "zod";
-import { validate } from "../../middleware/validate";
-import { Stream } from "../../db/schema";
 import {
+  StreamRepository,
   FindAllParams,
   ExportParams,
-  StreamRepository,
   UpdateStreamParams,
 } from "../../repositories/streamRepository";
+import { Stream } from "../../db/schema";
 import { accrualService } from "../../services/accrualService";
 import {
-  getStreamsQuerySchema,
-  uuidParamSchema,
-  uuidSchema,
-} from "../../validation/schemas";
+  TenantContext,
+  tenantAuthorizationService,
+} from "../../services/tenantAuthorizationService";
+import { tenantContextMiddleware } from "../../middleware/tenantContext";
 
 const router = Router();
 const streamRepository = new StreamRepository();
-const allowedUpdateFields = new Set(["labels", "offChainMemo", "status", "updatedAt"]);
-const validStreamStatuses = ["active", "paused", "cancelled", "completed"] as const;
-const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-type UpdateStreamRequestBody = Omit<Partial<UpdateStreamParams>, "updatedAt"> & {
-  updatedAt?: string;
-};
+const uuidRegex =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const uuidSchema = z.string().regex(uuidRegex);
 
-const isJsonObject = (value: unknown): value is Record<string, unknown> => {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-};
+const allowedUpdateFields = new Set([
+  "labels",
+  "offChainMemo",
+  "status",
+  "updatedAt",
+]);
+
+const validStreamStatuses = ["active", "paused", "cancelled", "completed"];
 
 const createStreamSchema = z.object({
+  tenantId: z.string().min(1).optional(),
   payer: z.string().min(1, "payer is required"),
   recipient: z.string().min(1, "recipient is required"),
   ratePerSecond: z
@@ -48,7 +50,27 @@ const createStreamSchema = z.object({
 
 type CreateStreamBody = z.infer<typeof createStreamSchema>;
 
-// POST /api/v1/streams
+/**
+ * Resolves optional tenant scope for repository operations based on request context.
+ */
+function getTargetTenantId(
+  req: Request,
+  explicitContext?: TenantContext | null,
+): string | undefined {
+  const context = explicitContext ?? req.tenantContext;
+  if (!context || context.isServiceBypass) {
+    return undefined;
+  }
+  const hasTenantScope = Boolean(
+    req.header("x-tenant-id") ||
+      req.header("x-tenant") ||
+      (req.apiKey as Record<string, unknown> | undefined)?.tenantId,
+  );
+  return hasTenantScope ? context.tenantId : undefined;
+}
+
+router.use(tenantContextMiddleware);
+
 router.post("/", async (req: Request, res: Response) => {
   try {
     const parsed = createStreamSchema.safeParse(req.body);
@@ -60,8 +82,20 @@ router.post("/", async (req: Request, res: Response) => {
     }
 
     const body = parsed.data as CreateStreamBody;
+    const context = req.tenantContext;
+    const targetTenantId = getTargetTenantId(req);
+
+    if (body.tenantId && targetTenantId && !context?.isServiceBypass && body.tenantId !== targetTenantId) {
+      return res.status(403).json({ error: "Cannot create stream for another tenant" });
+    }
+
+    const streamTenantId =
+      context?.isServiceBypass && body.tenantId
+        ? body.tenantId
+        : (targetTenantId ?? body.tenantId ?? null);
 
     const stream = await streamRepository.create({
+      tenantId: streamTenantId,
       payer: body.payer,
       recipient: body.recipient,
       ratePerSecond: body.ratePerSecond,
@@ -72,16 +106,21 @@ router.post("/", async (req: Request, res: Response) => {
       lastSettledAt: new Date(body.startTime),
     });
 
+    if (context?.isServiceBypass && req.header("x-admin-bypass") === "true") {
+      await tenantAuthorizationService.auditBypass(context, {
+        streamId: stream.id,
+        action: "create_stream",
+        route: req.originalUrl,
+        method: req.method,
+      });
+    }
+
     return res.status(201).json(stream);
   } catch (error) {
     console.error("Error creating stream:", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 });
-
-// ---------------------------------------------------------------------------
-// Auth middleware
-// ---------------------------------------------------------------------------
 
 /**
  * Enforces Bearer-token authentication using the JWT_SECRET environment
@@ -114,14 +153,12 @@ function requireAuth(req: Request, res: Response, next: NextFunction): void {
   next();
 }
 
-// ---------------------------------------------------------------------------
-// CSV helpers
-// ---------------------------------------------------------------------------
-
 const CSV_HEADER =
   "id,payer,recipient,status,ratePerSecond,startTime,endTime,totalAmount,lastSettledAt,createdAt,updatedAt\r\n";
 
-/** RFC 4180-compliant field escaping. */
+/**
+ * RFC 4180-compliant field escaping.
+ */
 function escapeCsvField(value: string): string {
   if (/[,"\r\n]/.test(value)) {
     return `"${value.replace(/"/g, '""')}"`;
@@ -129,6 +166,9 @@ function escapeCsvField(value: string): string {
   return value;
 }
 
+/**
+ * Serializes stream fields to CSV format.
+ */
 function rowToCsvLine(stream: Stream): string {
   const fields: string[] = [
     stream.id,
@@ -146,23 +186,31 @@ function rowToCsvLine(stream: Stream): string {
   return fields.map(escapeCsvField).join(",") + "\r\n";
 }
 
-// ---------------------------------------------------------------------------
-// GET /api/v1/streams/export.csv
-// ---------------------------------------------------------------------------
 router.get("/export.csv", requireAuth, async (req: Request, res: Response) => {
   try {
     const { payer, recipient, status } = req.query;
+    const { context } = tenantAuthorizationService.extractTenantContext(req);
+    const targetTenantId = getTargetTenantId(req, context);
 
     const filters: ExportParams = {
       payer: payer as string | undefined,
       recipient: recipient as string | undefined,
       status: status as ExportParams["status"],
+      ...(targetTenantId ? { tenantId: targetTenantId } : {}),
     };
+
+    if (context?.isServiceBypass && req.header("x-admin-bypass") === "true") {
+      await tenantAuthorizationService.auditBypass(context, {
+        action: "export_streams",
+        route: req.originalUrl,
+        method: req.method,
+      });
+    }
 
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
     res.setHeader(
       "Content-Disposition",
-      'attachment; filename="streams-export.csv"'
+      'attachment; filename="streams-export.csv"',
     );
 
     res.write(CSV_HEADER);
@@ -177,7 +225,9 @@ router.get("/export.csv", requireAuth, async (req: Request, res: Response) => {
       });
 
       for (const row of batch.rows) {
-        res.write(rowToCsvLine(row));
+        if (!context || tenantAuthorizationService.canAccessStream(context, row)) {
+          res.write(rowToCsvLine(row));
+        }
       }
 
       if (!batch.nextCursor) break;
@@ -195,7 +245,6 @@ router.get("/export.csv", requireAuth, async (req: Request, res: Response) => {
   }
 });
 
-// GET /api/v1/streams/:id/accrual-preview
 router.get("/:id/accrual-preview", async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -204,17 +253,28 @@ router.get("/:id/accrual-preview", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Invalid stream ID format" });
     }
 
+    const context = req.tenantContext;
     const stream = await streamRepository.findById(id);
 
-    if (!stream) {
+    if (!stream || (context && !tenantAuthorizationService.canAccessStream(context, stream))) {
       return res.status(404).json({ error: "Stream not found" });
+    }
+
+    if (context?.isServiceBypass && req.header("x-admin-bypass") === "true") {
+      await tenantAuthorizationService.auditBypass(context, {
+        streamId: stream.id,
+        action: "preview_accrual",
+        route: req.originalUrl,
+        method: req.method,
+      });
     }
 
     const preview = accrualService.calculateAccrual(stream);
 
     res.json({
       ...preview,
-      disclaimer: "This value is an estimate based on database records and contract formula. It may differ from the actual on-chain state due to indexing latency or pending transactions.",
+      disclaimer:
+        "This value is an estimate based on database records and contract formula. It may differ from the actual on-chain state due to indexing latency or pending transactions.",
       note: "This endpoint is under heavy rate limiting.",
     });
   } catch (error) {
@@ -223,31 +283,50 @@ router.get("/:id/accrual-preview", async (req: Request, res: Response) => {
   }
 });
 
-// GET /api/v1/streams/:id
-router.get(
-  "/:id",
-  async (req: Request, res: Response) => {
-    try {
-      const { id } = req.params;
-      if (!uuidRegex.test(id)) {
-        return res.status(400).json({ error: "Invalid stream ID format" });
-      }
-      const includeDeleted = req.query.includeDeleted === "true";
-      const stream = await streamRepository.findById(id, includeDeleted);
-
-      if (!stream) {
-        return res.status(404).json({ error: "Stream not found" });
-      }
-
-      res.json(stream);
-    } catch (error) {
-      console.error("Error fetching stream:", error);
-      res.status(500).json({ error: "Internal server error" });
+router.get("/:id", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    if (!uuidRegex.test(id)) {
+      return res.status(400).json({ error: "Invalid stream ID format" });
     }
-  },
-);
+    const includeDeleted = req.query.includeDeleted === "true";
+    const context = req.tenantContext;
+    const stream = await streamRepository.findById(id, includeDeleted);
 
-// PATCH /api/v1/streams/:id
+    if (!stream || (context && !tenantAuthorizationService.canAccessStream(context, stream))) {
+      return res.status(404).json({ error: "Stream not found" });
+    }
+
+    if (context?.isServiceBypass && req.header("x-admin-bypass") === "true") {
+      await tenantAuthorizationService.auditBypass(context, {
+        streamId: stream.id,
+        action: "read_stream",
+        route: req.originalUrl,
+        method: req.method,
+      });
+    }
+
+    res.json(stream);
+  } catch (error) {
+    console.error("Error fetching stream:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+interface UpdateStreamRequestBody {
+  labels?: string[];
+  offChainMemo?: string | null;
+  status?: string;
+  updatedAt?: string;
+}
+
+/**
+ * Validates whether the incoming payload is a genuine non-null object.
+ */
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 router.patch("/:id", async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -262,9 +341,13 @@ router.patch("/:id", async (req: Request, res: Response) => {
     }
 
     const updates = requestBody as UpdateStreamRequestBody;
-    const invalidFields = Object.keys(updates).filter((field) => !allowedUpdateFields.has(field));
+    const invalidFields = Object.keys(updates).filter(
+      (field) => !allowedUpdateFields.has(field),
+    );
     if (invalidFields.length > 0) {
-      return res.status(400).json({ error: `Invalid fields: ${invalidFields.join(", ")}` });
+      return res
+        .status(400)
+        .json({ error: `Invalid fields: ${invalidFields.join(", ")}` });
     }
 
     if (updates.status && !validStreamStatuses.includes(updates.status)) {
@@ -273,13 +356,22 @@ router.patch("/:id", async (req: Request, res: Response) => {
 
     if (
       updates.labels !== undefined &&
-      (!Array.isArray(updates.labels) || !updates.labels.every((label) => typeof label === "string"))
+      (!Array.isArray(updates.labels) ||
+        !updates.labels.every((label) => typeof label === "string"))
     ) {
-      return res.status(400).json({ error: "Labels must be an array of strings" });
+      return res
+        .status(400)
+        .json({ error: "Labels must be an array of strings" });
     }
 
-    if (updates.offChainMemo !== undefined && updates.offChainMemo !== null && typeof updates.offChainMemo !== "string") {
-      return res.status(400).json({ error: "offChainMemo must be a string or null" });
+    if (
+      updates.offChainMemo !== undefined &&
+      updates.offChainMemo !== null &&
+      typeof updates.offChainMemo !== "string"
+    ) {
+      return res
+        .status(400)
+        .json({ error: "offChainMemo must be a string or null" });
     }
 
     let currentUpdatedAt: Date | undefined;
@@ -290,15 +382,41 @@ router.patch("/:id", async (req: Request, res: Response) => {
       }
     }
 
+    const context = req.tenantContext;
     const repositoryUpdates: UpdateStreamParams = {};
     if (updates.labels !== undefined) repositoryUpdates.labels = updates.labels;
-    if (updates.offChainMemo !== undefined) repositoryUpdates.offChainMemo = updates.offChainMemo;
-    if (updates.status !== undefined) repositoryUpdates.status = updates.status;
+    if (updates.offChainMemo !== undefined)
+      repositoryUpdates.offChainMemo = updates.offChainMemo;
+    if (updates.status !== undefined)
+      repositoryUpdates.status = updates.status as UpdateStreamParams["status"];
 
-    const updatedStream = await streamRepository.updateById(id, repositoryUpdates, currentUpdatedAt);
+    const targetTenantId = getTargetTenantId(req);
+    const updatedStream = targetTenantId
+      ? await streamRepository.updateById(
+          id,
+          repositoryUpdates,
+          currentUpdatedAt,
+          targetTenantId,
+        )
+      : await streamRepository.updateById(
+          id,
+          repositoryUpdates,
+          currentUpdatedAt,
+        );
 
     if (!updatedStream) {
-      return res.status(404).json({ error: "Stream not found or update conflict" });
+      return res
+        .status(404)
+        .json({ error: "Stream not found or update conflict" });
+    }
+
+    if (context?.isServiceBypass && req.header("x-admin-bypass") === "true") {
+      await tenantAuthorizationService.auditBypass(context, {
+        streamId: id,
+        action: "update_stream",
+        route: req.originalUrl,
+        method: req.method,
+      });
     }
 
     const streamWithEstimate = await streamRepository.findById(id);
@@ -309,19 +427,39 @@ router.patch("/:id", async (req: Request, res: Response) => {
   }
 });
 
-// POST /api/v1/streams/:id/restore
-// Restoration is explicit and preserves the stream's lifecycle status.
 router.post(
   "/:id/restore",
-  validate({ params: uuidParamSchema }),
   async (req: Request, res: Response) => {
     try {
-      const restored = await streamRepository.restoreById(req.params.id);
+      const { id } = req.params;
+      if (!uuidRegex.test(id)) {
+        return res.status(400).json({ error: "Invalid stream ID format" });
+      }
+
+      const context = req.tenantContext;
+      const targetTenantId = getTargetTenantId(req);
+      const restored = targetTenantId
+        ? await streamRepository.restoreById(id, targetTenantId)
+        : await streamRepository.restoreById(id);
+
       if (!restored) {
         return res.status(404).json({ error: "Deleted stream not found" });
       }
 
-      const stream = await streamRepository.findById(req.params.id);
+      if (context?.isServiceBypass && req.header("x-admin-bypass") === "true") {
+        await tenantAuthorizationService.auditBypass(context, {
+          streamId: id,
+          action: "restore_stream",
+          route: req.originalUrl,
+          method: req.method,
+        });
+      }
+
+      const stream = await streamRepository.findById(id);
+      if (!stream || (context && !tenantAuthorizationService.canAccessStream(context, stream))) {
+        return res.status(404).json({ error: "Stream not found" });
+      }
+
       return res.json(stream);
     } catch (error) {
       console.error("Error restoring stream:", error);
@@ -330,18 +468,32 @@ router.post(
   },
 );
 
-// DELETE /api/v1/streams/:id
 router.delete(
   "/:id",
-  validate({ params: uuidParamSchema }),
   async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
+      if (!uuidRegex.test(id)) {
+        return res.status(400).json({ error: "Invalid stream ID format" });
+      }
 
-      const deleted = await streamRepository.softDeleteById(id);
+      const context = req.tenantContext;
+      const targetTenantId = getTargetTenantId(req);
+      const deleted = targetTenantId
+        ? await streamRepository.softDeleteById(id, targetTenantId)
+        : await streamRepository.softDeleteById(id);
 
       if (!deleted) {
         return res.status(404).json({ error: "Stream not found" });
+      }
+
+      if (context?.isServiceBypass && req.header("x-admin-bypass") === "true") {
+        await tenantAuthorizationService.auditBypass(context, {
+          streamId: id,
+          action: "delete_stream",
+          route: req.originalUrl,
+          method: req.method,
+        });
       }
 
       res.status(204).end();
@@ -349,19 +501,58 @@ router.delete(
       console.error("Error deleting stream:", error);
       res.status(500).json({ error: "Internal server error" });
     }
-  }
+  },
 );
 
-// GET /api/v1/streams
+const getStreamsQuerySchema = z.object({
+  payer: z.string().optional(),
+  recipient: z.string().optional(),
+  status: z
+    .enum(["active", "paused", "cancelled", "completed"])
+    .optional(),
+  page: z.coerce.number().int().positive().optional(),
+  limit: z.coerce.number().int().positive().max(100).optional(),
+});
+
 router.get(
   "/",
-  validate({ query: getStreamsQuerySchema }),
   async (req: Request, res: Response) => {
     try {
-      const params = req.query as unknown as FindAllParams;
-      const result = await streamRepository.findAll(params);
+      const queryResult = getStreamsQuerySchema.safeParse(req.query);
+      if (!queryResult.success) {
+        return res.status(400).json({
+          error: "Validation failed",
+          details: queryResult.error.flatten().fieldErrors,
+        });
+      }
 
-      res.json(result);
+      const context = req.tenantContext;
+      const targetTenantId = getTargetTenantId(req);
+      const params: FindAllParams = {
+        ...(queryResult.data as FindAllParams),
+        ...(targetTenantId ? { tenantId: targetTenantId } : {}),
+      };
+
+      const result = await streamRepository.findAll(params);
+      const filteredStreams = context && !context.isServiceBypass && targetTenantId
+        ? result.streams.filter((s) =>
+            tenantAuthorizationService.canAccessStream(context, s),
+          )
+        : result.streams;
+
+      if (context?.isServiceBypass && req.header("x-admin-bypass") === "true") {
+        await tenantAuthorizationService.auditBypass(context, {
+          action: "list_streams",
+          route: req.originalUrl,
+          method: req.method,
+        });
+      }
+
+      res.json({
+        ...result,
+        streams: filteredStreams,
+        total: filteredStreams.length,
+      });
     } catch (error) {
       console.error("Error fetching streams:", error);
       res.status(500).json({ error: "Internal server error" });
